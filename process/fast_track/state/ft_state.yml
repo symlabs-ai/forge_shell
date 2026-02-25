@@ -10,10 +10,10 @@ mdd_mode: hyper                # normal | hyper
 mvp_delivered: true
 
 current_phase: ft_feedback   # ft_mdd | ft_plan | ft_tdd | ft_delivery | ft_e2e | ft_feedback
-current_cycle: cycle-01      # ex.: cycle-01
+current_cycle: cycle-02
 
 last_completed_step: ft.feedback.01.retro_note
-next_recommended_step: ft.plan.01.task_list  # cycle-02
+next_recommended_step: ft.plan.01.task_list  # cycle-03
 
 completed_steps:
   - ft.mdd.01.hipotese
@@ -32,8 +32,13 @@ completed_steps:
   - ft.tdd.09.audit           # T-39 a T-41
   - ft.tdd.10.doctor          # T-42
   - ft.tdd.11.pyinstaller     # T-43
-  - ft.e2e.01.cli_validation  # E2E Gate PASSED — 261 testes
+  - ft.e2e.01.cli_validation  # E2E Gate PASSED — 261 testes (cycle-01)
   - ft.feedback.01.retro_note # retro-cycle-01.md gerado
+  # cycle-02
+  - ft.plan.01.task_list      # TASK_LIST_cycle02.md — 9 tasks
+  - ft.tdd.c2.wiring          # C2-T-01 a C2-T-09: packaging + I/O loop + CLI wiring
+  - ft.e2e.02.cli_validation  # E2E Gate PASSED — 306 testes
+  - ft.feedback.02.retro_note # retro-cycle-02.md gerado
 
 blocked: false
 blocked_reason: null
@@ -46,6 +51,7 @@ metricas:
   ciclos_completos: 1
   tasks_total: 43
   tasks_done: 43
-  tests_passing: 261
+  tests_passing: 306
   tests_skipped: 1
   e2e_gate: passed
+  ciclos_completos: 2

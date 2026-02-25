@@ -15,6 +15,12 @@ Uso:
 import argparse
 import sys
 
+from src.application.usecases.terminal_session import TerminalSession
+from src.application.usecases.doctor_runner import DoctorRunner, CheckStatus
+from src.application.usecases.share_session import ShareSession
+from src.infrastructure.config.loader import ConfigLoader
+from src.infrastructure.collab.session_manager import SessionManager
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -95,25 +101,31 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "share":
-        print("[sym_shell] share: não implementado ainda (T-29)")
-        return 0
-
     if args.command == "doctor":
-        print("[sym_shell] doctor: não implementado ainda (T-42)")
+        runner = DoctorRunner()
+        report = runner.run()
+        print(report.to_text())
+        return 0 if report.overall.value != CheckStatus.FAIL.value else 1
+
+    if args.command == "share":
+        sm = SessionManager()
+        uc = ShareSession(session_manager=sm)
+        expire = getattr(args, "expire", 60) or 60
+        result = uc.run(host_id="local", expire_minutes=expire)
+        print(f"[sym_shell] Sessão compartilhada iniciada")
+        print(f"  Session ID : {result['session_id']}")
+        print(f"  Token      : {result['token']}")
+        print(f"  Expira em  : {result['expires_at']}")
         return 0
 
     if args.command == "attach":
-        print(f"[sym_shell] attach {args.session_id}: não implementado ainda (T-30)")
+        print(f"[sym_shell] attach {args.session_id}: não implementado ainda")
         return 0
 
-    if args.passthrough:
-        print("[sym_shell] --passthrough: não implementado ainda (T-14)")
-        return 0
-
-    # Modo padrão: NL Mode ativo
-    print("[sym_shell] sessão local: não implementado ainda (T-05+)")
-    return 0
+    # --passthrough ou modo padrão (NL Mode)
+    config = ConfigLoader().load()
+    session = TerminalSession(config=config, passthrough=args.passthrough)
+    return session.run()
 
 
 if __name__ == "__main__":

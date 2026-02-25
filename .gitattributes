@@ -1,0 +1,23 @@
+# Normalização de line endings
+* text=auto
+
+# Scripts shell sempre LF
+*.sh text eol=lf
+
+# Python sempre LF
+*.py text eol=lf
+
+# Configuração sempre LF
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+
+# Binários — não tocar
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.gz binary
+*.zip binary
