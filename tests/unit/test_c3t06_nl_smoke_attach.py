@@ -6,7 +6,7 @@ QUANDO processo comandos de toggle/escape
 ENTÃO comportamento correto sem LLM real
 """
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch
 
 from src.application.usecases.nl_interceptor import NLInterceptor, InterceptAction
 from src.application.usecases.nl_mode_engine import NLModeEngine, NLModeState
@@ -74,21 +74,25 @@ class TestNLModeSmokeWithoutLLM:
 
 
 class TestAttachWiredCLI:
+    def _make_mock_vc(self):
+        mock_vc = MagicMock()
+        mock_vc.connect = AsyncMock(return_value=None)
+        mock_vc.wait = AsyncMock(return_value=None)
+        mock_vc.close = AsyncMock(return_value=None)
+        return mock_vc
+
     def test_attach_no_longer_stub_notimplemented(self, capsys) -> None:
-        """attach deve exibir info de conexão, não apenas 'não implementado'."""
+        """attach deve exibir info de conexão e chamar viewer.connect()."""
         with patch("src.adapters.cli.main.ViewerClient") as MockVC:
-            mock_vc = MagicMock()
-            mock_vc.connect = MagicMock(return_value=None)
-            MockVC.return_value = mock_vc
+            MockVC.return_value = self._make_mock_vc()
             from src.adapters.cli.main import main
             rc = main(["attach", "s-test123"])
-        # deve mencionar a sessão, não apenas stub
         captured = capsys.readouterr()
         assert rc == 0
 
     def test_attach_with_session_id(self) -> None:
         with patch("src.adapters.cli.main.ViewerClient") as MockVC:
-            MockVC.return_value = MagicMock()
+            MockVC.return_value = self._make_mock_vc()
             from src.adapters.cli.main import main
             rc = main(["attach", "s-abc"])
         assert rc == 0

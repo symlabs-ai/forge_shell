@@ -71,6 +71,14 @@ class ViewerClient:
         except Exception as exc:
             log.debug("ViewerClient: loop encerrado (%s)", exc)
 
+    async def wait(self) -> None:
+        """Aguarda até que o receive loop encerre (conexão fechada pelo relay)."""
+        if self._task is not None:
+            try:
+                await self._task
+            except (asyncio.CancelledError, Exception):
+                pass
+
     async def close(self) -> None:
         if self._task:
             self._task.cancel()

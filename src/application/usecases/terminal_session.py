@@ -53,8 +53,10 @@ class TerminalSession:
 
         self._engine = PTYEngine()
         self._detector = AlternateScreenDetector()
-        self._interceptor = None  # injetado após construção (lazy / DI)
-        self._stdout = None       # injetado para testes; padrão: sys.stdout.buffer
+        self._interceptor = None    # injetado após construção (lazy / DI)
+        self._auditor = None        # injetado via DI; None = sem auditoria
+        self._relay_bridge = None   # injetado via DI; None = sem relay streaming
+        self._stdout = None         # injetado para testes; padrão: sys.stdout.buffer
 
     @property
     def mode(self) -> SessionMode:
@@ -83,11 +85,22 @@ class TerminalSession:
         self._engine.write(data)
 
     def _handle_pty_output(self, data: bytes) -> None:
-        """Processar output do PTY: detectar alternate screen e escrever em stdout."""
+        """Processar output do PTY: detectar alternate screen, auditar, relay e escrever em stdout."""
         self._detector.feed(data)
         out = self._stdout or getattr(sys.stdout, "buffer", None)
         if out is not None:
             out.write(data)
+        if self._relay_bridge is not None:
+            try:
+                self._relay_bridge.send(data)
+            except Exception:
+                pass
+        if self._auditor is not None and b"\n" in data:
+            line = data.decode("utf-8", errors="replace").strip()
+            try:
+                self._auditor.log_command(command=line, origin="pty", exit_code=0)
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # SIGWINCH

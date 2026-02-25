@@ -53,10 +53,18 @@ class LLMConfig:
 
 
 @dataclass
+class RelayConfig:
+    url: str = "ws://localhost:8765"
+    port: int = 8765
+    tls: bool = False
+
+
+@dataclass
 class SymShellConfig:
     nl_mode: NLModeConfig = field(default_factory=NLModeConfig)
     redaction: RedactionConfig = field(default_factory=RedactionConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
+    relay: RelayConfig = field(default_factory=RelayConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -147,4 +155,11 @@ class ConfigLoader:
             max_retries=llm_raw.get("max_retries", 2),
         )
 
-        return SymShellConfig(nl_mode=nl_mode, redaction=redaction, llm=llm)
+        relay_raw = raw.get("relay", {})
+        relay = RelayConfig(
+            url=relay_raw.get("url", "ws://localhost:8765"),
+            port=relay_raw.get("port", 8765),
+            tls=relay_raw.get("tls", False),
+        )
+
+        return SymShellConfig(nl_mode=nl_mode, redaction=redaction, llm=llm, relay=relay)

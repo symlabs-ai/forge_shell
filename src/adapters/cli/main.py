@@ -13,6 +13,7 @@ Uso:
                             sym_shell é ativada neste modo.
 """
 import argparse
+import asyncio
 import sys
 
 from src.application.usecases.terminal_session import TerminalSession
@@ -123,12 +124,28 @@ def main(argv: list[str] | None = None) -> int:
         config = ConfigLoader().load()
         print(f"[sym_shell] Conectando à sessão: {args.session_id}")
         print(f"[sym_shell] Use Ctrl+C para encerrar a visualização")
-        # ViewerClient conecta ao relay e renderiza output (ciclo-03)
         viewer = ViewerClient(
-            relay_url="ws://localhost:8765",  # padrão; configurável via config em ciclo futuro
+            relay_url=config.relay.url,
             session_id=args.session_id,
             token="",  # token fornecido via flag em ciclo futuro
         )
+
+        async def _viewer_loop() -> None:
+            await viewer.connect(
+                on_output=lambda data: sys.stdout.buffer.write(data) or sys.stdout.buffer.flush()
+            )
+            try:
+                # aguarda até relay fechar a conexão
+                await viewer.wait()
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                pass
+            finally:
+                await viewer.close()
+
+        try:
+            asyncio.run(_viewer_loop())
+        except KeyboardInterrupt:
+            pass
         return 0
 
     # --passthrough ou modo padrão (NL Mode)
