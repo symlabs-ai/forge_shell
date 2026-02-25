@@ -20,6 +20,7 @@ from enum import Enum
 from src.infrastructure.config.loader import SymShellConfig
 from src.infrastructure.terminal_engine.pty_engine import PTYEngine
 from src.infrastructure.terminal_engine.alternate_screen import AlternateScreenDetector
+from src.application.usecases.nl_interceptor import InterceptAction
 
 
 class SessionMode(str, Enum):
@@ -78,11 +79,78 @@ class TerminalSession:
             return
 
         if self._interceptor is not None:
-            self._interceptor.intercept(data)
+            result = self._interceptor.intercept(data)
+            self._handle_intercept_result(result)
             return
 
         # fallback: sem interceptor configurado, vai direto para PTY
         self._engine.write(data)
+
+    def _handle_intercept_result(self, result) -> None:
+        """Processar resultado do NLInterceptor: executar comando, exibir sugestão ou indicador."""
+        if result is None:
+            return
+        out = self._stdout or getattr(sys.stdout, "buffer", None)
+
+        if result.action == InterceptAction.NOOP:
+            return
+
+        if result.action == InterceptAction.EXEC_BASH:
+            cmd = (result.bash_command or "").strip()
+            if cmd:
+                self._engine.write(cmd.encode() + b"\n")
+            return
+
+        if result.action == InterceptAction.TOGGLE:
+            # indicador de modo visível no terminal
+            indicator = b"\r\n\033[33m[sym_shell: NL Mode ativo]\033[0m\r\n"
+            if out:
+                out.write(indicator)
+            return
+
+        if result.action == InterceptAction.SHOW_SUGGESTION:
+            suggestion = result.suggestion
+            if suggestion is None:
+                return
+            commands = getattr(suggestion, "commands", []) or []
+            explanation = getattr(suggestion, "explanation", "") or ""
+            risk = getattr(suggestion, "risk_level", None)
+            risk_str = risk.value if hasattr(risk, "value") else str(risk)
+
+            # formatar sugestão para o terminal
+            lines = [b"\r\n"]
+            if commands:
+                cmd_display = commands[0].encode()
+                lines.append(b"\033[1;32m\xf0\x9f\x92\xa1 " + cmd_display + b"\033[0m\r\n")
+            if explanation:
+                lines.append(b"   " + explanation.encode() + b"\r\n")
+            lines.append(b"   Risco: " + risk_str.encode() + b"\r\n")
+            lines.append(b"\r\n")
+
+            if out:
+                for line in lines:
+                    out.write(line)
+
+            # injeta o primeiro comando no PTY (usuário pode revisar e pressionar Enter)
+            if commands:
+                self._engine.write(commands[0].encode())
+            return
+
+    def _write_startup_hint(self) -> None:
+        """Exibir hint de NL Mode na abertura da sessão (apenas modo NL/BASH)."""
+        if self._mode == SessionMode.PASSTHROUGH:
+            return
+        out = self._stdout or getattr(sys.stdout, "buffer", None)
+        if out is None:
+            return
+        hint = (
+            b"\033[36msym_shell\033[0m"
+            b"  |  \033[1mNL Mode\033[0m"
+            b"  |  \033[33m!\033[0m para bash"
+            b"  |  \033[33m!<cmd>\033[0m bash direto"
+            b"\r\n"
+        )
+        out.write(hint)
 
     def _handle_pty_output(self, data: bytes) -> None:
         """Processar output do PTY: detectar alternate screen, auditar, relay e escrever em stdout."""

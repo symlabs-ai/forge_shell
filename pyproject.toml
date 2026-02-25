@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "sym-shell"
@@ -10,7 +10,8 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
     "pyyaml>=6.0",
-    "forge-llm",
+    "websockets>=14.0",
+    "forge-llm>=0.7",
 ]
 
 [project.scripts]

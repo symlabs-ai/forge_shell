@@ -47,7 +47,7 @@ class NLModeConfig:
 class LLMConfig:
     api_key: str | None = None
     provider: str = "ollama"         # ollama | openai | anthropic | openrouter
-    model: str = "llama3"
+    model: str = "llama3.2"
     timeout_seconds: int = 30
     max_retries: int = 2
 
@@ -150,7 +150,7 @@ class ConfigLoader:
         llm = LLMConfig(
             api_key=llm_raw.get("api_key", None),
             provider=llm_raw.get("provider", "ollama"),
-            model=llm_raw.get("model", "llama3"),
+            model=llm_raw.get("model", "llama3.2"),
             timeout_seconds=llm_raw.get("timeout_seconds", 30),
             max_retries=llm_raw.get("max_retries", 2),
         )
