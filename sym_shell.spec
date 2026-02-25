@@ -1,0 +1,60 @@
+# -*- mode: python ; coding: utf-8 -*-
+# sym_shell.spec — PyInstaller build spec (T-43)
+#
+# Gera binário standalone Linux: dist/sym_shell
+# Uso: pyinstaller sym_shell.spec
+
+block_cipher = None
+
+a = Analysis(
+    ['src/adapters/cli/main.py'],
+    pathex=['.'],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        'src.infrastructure.terminal_engine.pty_engine',
+        'src.infrastructure.terminal_engine.alternate_screen',
+        'src.infrastructure.intelligence.forge_llm_adapter',
+        'src.infrastructure.intelligence.risk_engine',
+        'src.infrastructure.intelligence.redaction',
+        'src.infrastructure.collab.session_manager',
+        'src.infrastructure.collab.relay_server',
+        'src.infrastructure.collab.protocol',
+        'src.infrastructure.audit.audit_logger',
+        'src.infrastructure.config.loader',
+        'forge_llm',
+        'yaml',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=['pytest', 'unittest'],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='sym_shell',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)

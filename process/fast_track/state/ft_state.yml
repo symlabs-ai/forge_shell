@@ -7,13 +7,13 @@ version: "0.1.0"
 orchestrator: ft_manager
 stakeholder_mode: interactive  # interactive | autonomous
 mdd_mode: hyper                # normal | hyper
-mvp_delivered: false
+mvp_delivered: true
 
-current_phase: ft_mdd        # ft_mdd | ft_plan | ft_tdd | ft_delivery | ft_e2e | ft_feedback
+current_phase: ft_delivery   # ft_mdd | ft_plan | ft_tdd | ft_delivery | ft_e2e | ft_feedback
 current_cycle: cycle-01      # ex.: cycle-01
 
-last_completed_step: ft.plan.01.task_list
-next_recommended_step: ft.tdd.01.selecao
+last_completed_step: ft.tdd.43.pyinstaller
+next_recommended_step: ft.delivery.01.e2e_smoke
 
 completed_steps:
   - ft.mdd.01.hipotese
@@ -21,6 +21,17 @@ completed_steps:
   - ft.mdd.03.validacao
   - ft.mdd.hyper
   - ft.plan.01.task_list
+  - ft.tdd.01.scaffolding     # T-01 a T-04
+  - ft.tdd.02.pty_engine      # T-05 a T-14
+  - ft.tdd.03.nl_mode         # T-15 a T-23
+  - ft.tdd.04.explain_risk    # T-24 a T-26
+  - ft.tdd.05.relay_protocol  # T-27
+  - ft.tdd.06.relay_server    # T-28 a T-33
+  - ft.tdd.07.privacy         # T-34 a T-35
+  - ft.tdd.08.collab_tokens   # T-36 a T-38
+  - ft.tdd.09.audit           # T-39 a T-41
+  - ft.tdd.10.doctor          # T-42
+  - ft.tdd.11.pyinstaller     # T-43
 
 blocked: false
 blocked_reason: null
@@ -30,4 +41,8 @@ metricas:
   tokens_consumidos: 0
   horas_consumidas: 0
   data_inicio: "2026-02-25"
-  ciclos_completos: 0
+  ciclos_completos: 1
+  tasks_total: 43
+  tasks_done: 43
+  tests_passing: 221
+  tests_skipped: 1
