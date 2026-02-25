@@ -71,12 +71,39 @@ Para alternar: atualizar `stakeholder_mode` em `process/fast_track/state/ft_stat
 
 ### 1. Inicialização
 
-1. Ler `process/fast_track/state/ft_state.yml`.
-2. Se `current_phase: null` (projeto novo):
+1. **Verificar vínculo git** — antes de qualquer outra coisa, checar se o repositório tem remote configurado:
+   ```bash
+   git remote -v
+   ```
+   - Se houver remote apontando para o repositório de template (ex: `symlabs-ai/fast-track_process`):
+     ```
+     ⚠️  Este repositório ainda está vinculado ao template original:
+         origin → <url-atual>
+
+     Recomendo desvincular e apontar para o seu próprio repositório.
+     Posso fazer isso agora. Qual a URL do novo repositório?
+     (Se ainda não criou, crie no GitHub/GitLab e me passe a URL.)
+     ```
+   - Aguardar confirmação do dev com a nova URL.
+   - Ao receber a URL, executar:
+     ```bash
+     git remote remove origin
+     git remote add origin <nova-url>
+     git push -u origin main
+     ```
+   - Se não houver remote nenhum: prosseguir normalmente, mas sugerir criar um:
+     ```
+     ℹ️  Nenhum remote configurado. Recomendo criar um repositório e conectar:
+         git remote add origin <sua-url>
+     Posso fazer isso se você me passar a URL.
+     ```
+
+2. Ler `process/fast_track/state/ft_state.yml`.
+3. Se `current_phase: null` (projeto novo):
    - Apresentar: "Novo projeto. Vou conduzir o processo Fast Track. Começando pela descoberta."
    - Atualizar state: `stakeholder_mode: interactive`, `current_phase: ft_mdd`.
    - Acionar `ft_coach` para `ft.mdd.01.hipotese`.
-3. Se já há estado:
+4. Se já há estado:
    - Informar: "Retomando de [next_recommended_step]. Último step: [last_completed_step]."
    - Continuar a partir do step pendente.
 
