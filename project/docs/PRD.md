@@ -69,14 +69,19 @@ Dev/ops solo e times pequenos; mercado de ferramentas de produtividade para term
 
 ## 5. User Stories + Acceptance Criteria
 
-### US-01: Entrada em linguagem natural
+### US-01: Entrada em linguagem natural (NL Mode como default)
 **Como** dev/ops, **quero** descrever o que preciso fazer em português/inglês, **para** receber um comando Bash correto sem precisar lembrar flags e sintaxe.
 
+> **NL Mode é o estado padrão.** Ao abrir o sym_shell, o usuário já está em NL Mode.
+> Hint exibido na abertura: `sym_shell  |  NL Mode  |  ! para bash  |  !<cmd> executa bash direto`
+
 **Acceptance Criteria:**
-- **AC-01**: Given o terminal está aberto, When digito `?? listar arquivos maiores que 500MB`, Then sym_shell exibe comando sugerido, explicação curta e classificação de risco (baixo/médio/alto).
-- **AC-02**: Given uma sugestão exibida, When seleciono "Executar", Then o comando é colado no prompt do Bash aguardando confirmação — nunca executado automaticamente.
-- **AC-03**: Given o risco é classificado como alto, When a sugestão é exibida, Then é exigida confirmação dupla (double confirm) antes de colocar o comando no prompt.
-- **AC-04**: Given o adapter ForgeLLM retorna resposta fora do schema, When o modo NL é acionado, Then sym_shell exibe "não consegui" sem travar o terminal.
+- **AC-01**: Given sym_shell está aberto (NL Mode ativo), When digito `listar arquivos maiores que 500MB`, Then sym_shell exibe comando sugerido, explicação curta e classificação de risco (baixo/médio/alto).
+- **AC-02**: Given NL Mode ativo, When digito `!ls -al`, Then sym_shell executa `ls -al` diretamente no Bash e retorna ao NL Mode automaticamente.
+- **AC-03**: Given NL Mode ativo, When digito `!` sozinho, Then sym_shell alterna para Bash Mode; digitando `!` novamente, retorna ao NL Mode (toggle).
+- **AC-04**: Given uma sugestão NL exibida, When seleciono "Executar", Then o comando é executado após confirmação explícita do usuário.
+- **AC-05**: Given o risco é classificado como alto, When a sugestão é exibida, Then é exigida confirmação dupla (double confirm) antes de executar.
+- **AC-06**: Given o adapter ForgeLLM retorna resposta fora do schema, When NL Mode processa, Then sym_shell exibe "não consegui" sem travar o terminal.
 
 ### US-02: Terminal nativo (PTY real)
 **Como** usuário do sym_shell, **quero** que o terminal se comporte exatamente como Bash nativo, **para** usar `sudo`, `ssh`, `vim`, `top`, job control e qualquer app interativo sem quebras.
@@ -149,10 +154,17 @@ Dev/ops solo e times pequenos; mercado de ferramentas de produtividade para term
 | # | Decisão | Contexto | Alternativas Consideradas | Data |
 |---|---------|----------|---------------------------|------|
 | 1 | PTY real (não wrapper de texto) | Compatibilidade com sudo, vim, job control | Wrapper readline, expect | 2026-02-25 |
-| 2 | ForgeLLM como provider obrigatório | Integração interna Symlabs | OpenAI, Anthropic, local Ollama | 2026-02-25 |
+| 2 | ForgeLLM como biblioteca Python (`symlabs-ai/forge_llm`) | Integração interna Symlabs; abstrai múltiplos providers | HTTP endpoint próprio | 2026-02-25 |
 | 3 | View-only + suggest-only no MVP (co-control pós-MVP) | Risco de abuso; complexidade de RBAC | Co-control desde o início | 2026-02-25 |
-| 4 | Confirmação obrigatória (nunca auto-executar) | Segurança; LLM não vira root | Auto-execução com flag | 2026-02-25 |
+| 4 | Confirmação obrigatória (nunca auto-executar via NL) | Segurança; LLM não vira root | Auto-execução com flag | 2026-02-25 |
 | 5 | Windows apenas na fase 1.2 | Backend ConPTY requer Rust/C; risco alto | Windows desde 1.0 | 2026-02-25 |
+| 6 | CLI (aplicativo), não login shell | Mais seguro, fácil de adotar/reverter; falha não deixa usuário sem terminal | Login shell via chsh | 2026-02-25 |
+| 7 | NL Mode como estado padrão | UX orientada a linguagem natural; bash acessível via `!` | Bash como default, NL via atalho | 2026-02-25 |
+| 8 | Relay intermediário (host↔relay↔client); cliente é terminal | Sem necessidade de porta aberta no host; UI administrativa no relay | Acesso direto IP:porta | 2026-02-25 |
+| 9 | Binário standalone via PyInstaller | Instalação sem dependência de Python no host | pip install, conda | 2026-02-25 |
+| 10 | Config em `~/.sym_shell/config.yaml` | Padrão Unix para apps de terminal; YAML legível | .env, TOML, flags only | 2026-02-25 |
+| 11 | Perfis de redaction (`dev`/`prod`) no MVP | Contexto rico em dev; máxima privacidade em prod | Redaction global única | 2026-02-25 |
+| 12 | MIT open-source | Sem restrições de dependências; adoção comunitária | Closed-source, BSL | 2026-02-25 |
 
 ---
 
@@ -176,3 +188,5 @@ Dev/ops solo e times pequenos; mercado de ferramentas de produtividade para term
 - Co-control remoto (pós-MVP)
 - 100% de compatibilidade Bash em todos os cenários (meta é compatibilidade pragmática)
 - Windows (fase 1.2), macOS (fase 1.1)
+- UI browser para cliente remoto (cliente é terminal; relay pode ter admin web separado)
+- Login shell (sym_shell é aplicativo CLI, não substitui o shell padrão do sistema)
