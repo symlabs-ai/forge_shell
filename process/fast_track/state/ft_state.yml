@@ -9,11 +9,11 @@ stakeholder_mode: interactive  # interactive | autonomous
 mdd_mode: hyper                # normal | hyper
 mvp_delivered: true
 
-current_phase: ft_feedback   # ft_mdd | ft_plan | ft_tdd | ft_delivery | ft_e2e | ft_feedback
-current_cycle: cycle-02
+current_phase: ft_feedback
+current_cycle: cycle-03
 
-last_completed_step: ft.feedback.01.retro_note
-next_recommended_step: ft.plan.01.task_list  # cycle-03
+last_completed_step: ft.e2e.03.relay_smoke
+next_recommended_step: ft.feedback.03.retro_note
 
 completed_steps:
   - ft.mdd.01.hipotese
@@ -39,6 +39,10 @@ completed_steps:
   - ft.tdd.c2.wiring          # C2-T-01 a C2-T-09: packaging + I/O loop + CLI wiring
   - ft.e2e.02.cli_validation  # E2E Gate PASSED — 306 testes
   - ft.feedback.02.retro_note # retro-cycle-02.md gerado
+  # cycle-03
+  - ft.plan.03.task_list      # TASK_LIST_cycle03.md — 6 tasks
+  - ft.tdd.c3.relay           # C3-T-01 a C3-T-06: relay WebSocket + NL smoke + attach
+  - ft.e2e.03.relay_smoke     # E2E Gate PASSED — 345 testes (22 smoke + regressão)
 
 blocked: false
 blocked_reason: null
@@ -48,10 +52,9 @@ metricas:
   tokens_consumidos: 0
   horas_consumidas: 0
   data_inicio: "2026-02-25"
-  ciclos_completos: 1
-  tasks_total: 43
-  tasks_done: 43
-  tests_passing: 306
+  ciclos_completos: 3
+  tasks_total: 49
+  tasks_done: 49
+  tests_passing: 345
   tests_skipped: 1
   e2e_gate: passed
-  ciclos_completos: 2

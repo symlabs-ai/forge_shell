@@ -20,6 +20,7 @@ from src.application.usecases.doctor_runner import DoctorRunner, CheckStatus
 from src.application.usecases.share_session import ShareSession
 from src.infrastructure.config.loader import ConfigLoader
 from src.infrastructure.collab.session_manager import SessionManager
+from src.infrastructure.collab.viewer_client import ViewerClient
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -119,7 +120,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "attach":
-        print(f"[sym_shell] attach {args.session_id}: não implementado ainda")
+        config = ConfigLoader().load()
+        print(f"[sym_shell] Conectando à sessão: {args.session_id}")
+        print(f"[sym_shell] Use Ctrl+C para encerrar a visualização")
+        # ViewerClient conecta ao relay e renderiza output (ciclo-03)
+        viewer = ViewerClient(
+            relay_url="ws://localhost:8765",  # padrão; configurável via config em ciclo futuro
+            session_id=args.session_id,
+            token="",  # token fornecido via flag em ciclo futuro
+        )
         return 0
 
     # --passthrough ou modo padrão (NL Mode)
