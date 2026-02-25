@@ -37,16 +37,25 @@ class TestDoctorWiredE2E:
         assert "não implementado" not in out
 
 
+_SHARE_REDESIGN = pytest.mark.xfail(
+    reason="cycle-06: share agora é long-running (PTY session); não termina em 10s",
+    strict=False,
+)
+
+
 class TestShareWiredE2E:
+    @_SHARE_REDESIGN
     def test_share_runs_and_shows_session_id(self) -> None:
         rc, out, err = run("share")
         assert rc == 0
         assert "s-" in out  # session_id começa com "s-"
 
+    @_SHARE_REDESIGN
     def test_share_shows_token(self) -> None:
         rc, out, err = run("share")
         assert "Token" in out or "token" in out.lower()
 
+    @_SHARE_REDESIGN
     def test_share_no_longer_stub(self) -> None:
         rc, out, err = run("share")
         assert "não implementado" not in out

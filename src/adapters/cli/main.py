@@ -19,9 +19,16 @@ import sys
 from src.application.usecases.terminal_session import TerminalSession
 from src.application.usecases.doctor_runner import DoctorRunner, CheckStatus
 from src.application.usecases.share_session import ShareSession
+from src.application.usecases.nl_interceptor import NLInterceptor
+from src.application.usecases.nl_mode_engine import NLModeEngine
 from src.infrastructure.config.loader import ConfigLoader
 from src.infrastructure.collab.session_manager import SessionManager
 from src.infrastructure.collab.viewer_client import ViewerClient
+from src.infrastructure.intelligence.forge_llm_adapter import ForgeLLMAdapter
+from src.infrastructure.intelligence.risk_engine import RiskEngine
+from src.infrastructure.audit.audit_logger import AuditLogger
+from src.infrastructure.collab.relay_handler import RelayHandler
+from src.infrastructure.collab.relay_bridge import RelayBridge
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -110,15 +117,53 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if report.overall.value != CheckStatus.FAIL.value else 1
 
     if args.command == "share":
+        config = ConfigLoader().load()
         sm = SessionManager()
         uc = ShareSession(session_manager=sm)
         expire = getattr(args, "expire", 60) or 60
         result = uc.run(host_id="local", expire_minutes=expire)
+
+        relay_url = getattr(args, "relay", None) or config.relay.url
+        session_id = result["session_id"]
+        token = result["token"]
+
         print(f"[sym_shell] Sessão compartilhada iniciada")
-        print(f"  Session ID : {result['session_id']}")
-        print(f"  Token      : {result['token']}")
+        print(f"  Session ID : {session_id}")
+        print(f"  Token      : {token}")
         print(f"  Expira em  : {result['expires_at']}")
-        return 0
+        print(f"  Relay URL  : {relay_url}")
+
+        # Iniciar RelayHandler em thread background
+        relay = RelayHandler(host="0.0.0.0", port=config.relay.port)
+        import threading
+        relay_thread = threading.Thread(
+            target=lambda: asyncio.run(relay.start()), daemon=True
+        )
+        relay_thread.start()
+
+        # RelayBridge conecta o TerminalSession ao relay
+        bridge = RelayBridge(relay_url=relay_url, session_id=session_id, token=token)
+        bridge.start()
+
+        # Iniciar sessão normal com relay_bridge injetado
+        session = TerminalSession(config=config, passthrough=False)
+        adapter = ForgeLLMAdapter(
+            provider=config.llm.provider,
+            model=config.llm.model,
+            api_key=config.llm.api_key,
+            timeout_seconds=config.llm.timeout_seconds,
+            max_retries=config.llm.max_retries,
+        )
+        engine = NLModeEngine(llm_adapter=adapter, risk_engine=RiskEngine())
+        session._interceptor = NLInterceptor(nl_engine=engine)
+        session._auditor = AuditLogger()
+        session._relay_bridge = bridge
+
+        session._write_startup_hint()
+        rc = session.run()
+        bridge.stop()
+        relay.stop()
+        return rc
 
     if args.command == "attach":
         config = ConfigLoader().load()
@@ -151,6 +196,22 @@ def main(argv: list[str] | None = None) -> int:
     # --passthrough ou modo padrão (NL Mode)
     config = ConfigLoader().load()
     session = TerminalSession(config=config, passthrough=args.passthrough)
+
+    if not args.passthrough:
+        # injetar NLInterceptor com ForgeLLMAdapter real
+        adapter = ForgeLLMAdapter(
+            provider=config.llm.provider,
+            model=config.llm.model,
+            api_key=config.llm.api_key,
+            timeout_seconds=config.llm.timeout_seconds,
+            max_retries=config.llm.max_retries,
+        )
+        engine = NLModeEngine(llm_adapter=adapter, risk_engine=RiskEngine())
+        session._interceptor = NLInterceptor(nl_engine=engine)
+        # injetar AuditLogger
+        session._auditor = AuditLogger()
+
+    session._write_startup_hint()
     return session.run()
 
 

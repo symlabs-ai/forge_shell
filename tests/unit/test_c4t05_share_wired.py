@@ -45,18 +45,31 @@ class TestTerminalSessionRelayBridge:
         session._handle_pty_output(b"output data")  # sem bridge
 
 
+def _share_infra_patches():
+    return dict(
+        RelayHandler=MagicMock(),
+        RelayBridge=MagicMock(),
+        TerminalSession=MagicMock(**{"return_value.run.return_value": 0}),
+        NLInterceptor=MagicMock(),
+        AuditLogger=MagicMock(),
+        ForgeLLMAdapter=MagicMock(),
+        NLModeEngine=MagicMock(),
+        RiskEngine=MagicMock(),
+    )
+
+
 class TestShareCommandWired:
     def test_share_shows_relay_url(self, capsys) -> None:
         """share deve exibir a relay_url usada."""
         from src.adapters.cli.main import main
-        with patch("src.adapters.cli.main.SessionManager") as MockSM, \
-             patch("src.adapters.cli.main.ShareSession") as MockSS:
-            mock_result = {
+        with patch("src.adapters.cli.main.SessionManager"), \
+             patch("src.adapters.cli.main.ShareSession") as MockSS, \
+             patch.multiple("src.adapters.cli.main", **_share_infra_patches()):
+            MockSS.return_value.run.return_value = {
                 "session_id": "s-share-test",
                 "token": "tok-abc",
                 "expires_at": "2026-02-25T02:00:00+00:00",
             }
-            MockSS.return_value.run.return_value = mock_result
             rc = main(["share"])
         captured = capsys.readouterr()
         assert rc == 0
@@ -66,7 +79,8 @@ class TestShareCommandWired:
     def test_share_returns_0(self) -> None:
         from src.adapters.cli.main import main
         with patch("src.adapters.cli.main.SessionManager"), \
-             patch("src.adapters.cli.main.ShareSession") as MockSS:
+             patch("src.adapters.cli.main.ShareSession") as MockSS, \
+             patch.multiple("src.adapters.cli.main", **_share_infra_patches()):
             MockSS.return_value.run.return_value = {
                 "session_id": "s-x", "token": "t-x", "expires_at": "2026-01-01"
             }

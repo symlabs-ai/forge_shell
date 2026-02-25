@@ -102,8 +102,14 @@ class TerminalSession:
             return
 
         if result.action == InterceptAction.TOGGLE:
-            # indicador de modo visível no terminal
-            indicator = b"\r\n\033[33m[sym_shell: NL Mode ativo]\033[0m\r\n"
+            # alternar _mode e exibir indicador do novo estado
+            if self._mode == SessionMode.NL:
+                self._mode = SessionMode.BASH
+                label = b"Bash Mode ativo"
+            else:
+                self._mode = SessionMode.NL
+                label = b"NL Mode ativo"
+            indicator = b"\r\n\033[33m[sym_shell: " + label + b"]\033[0m\r\n"
             if out:
                 out.write(indicator)
             return
@@ -117,22 +123,30 @@ class TerminalSession:
             risk = getattr(suggestion, "risk_level", None)
             risk_str = risk.value if hasattr(risk, "value") else str(risk)
 
+            requires_confirm = getattr(result, "requires_double_confirm", False)
+
             # formatar sugestão para o terminal
             lines = [b"\r\n"]
             if commands:
                 cmd_display = commands[0].encode()
-                lines.append(b"\033[1;32m\xf0\x9f\x92\xa1 " + cmd_display + b"\033[0m\r\n")
+                lines.append(b"\033[1;32m[*] " + cmd_display + b"\033[0m\r\n")
             if explanation:
                 lines.append(b"   " + explanation.encode() + b"\r\n")
             lines.append(b"   Risco: " + risk_str.encode() + b"\r\n")
-            lines.append(b"\r\n")
+
+            if requires_confirm:
+                lines.append(b"\r\n")
+                lines.append(b"\033[1;31m[!] Risco ALTO \xe2\x80\x94 confirme digitando o comando manualmente.\033[0m\r\n")
+                lines.append(b"\r\n")
+            else:
+                lines.append(b"\r\n")
 
             if out:
                 for line in lines:
                     out.write(line)
 
-            # injeta o primeiro comando no PTY (usuário pode revisar e pressionar Enter)
-            if commands:
+            if not requires_confirm and commands:
+                # risco baixo/médio: injeta no PTY para o usuário revisar e pressionar Enter
                 self._engine.write(commands[0].encode())
             return
 

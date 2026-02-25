@@ -97,18 +97,57 @@ def _default_redaction_profiles() -> dict[str, RedactionProfileConfig]:
 # Loader
 # ---------------------------------------------------------------------------
 
+_CONFIG_EXAMPLE = """\
+# sym_shell — configuração (~/.sym_shell/config.yaml)
+# Copie para config.yaml e ajuste conforme necessário.
+
+nl_mode:
+  default_active: true        # NL Mode ativo por padrão
+  context_lines: 20           # últimas N linhas enviadas ao LLM
+  var_whitelist: []            # variáveis de ambiente enviadas ao LLM (ex: ["HOME", "USER"])
+
+llm:
+  provider: ollama             # ollama | openai | anthropic | openrouter
+  model: llama3.2              # modelo (ex: llama3.2, gpt-4o, claude-3-5-haiku-20241022)
+  api_key: null                # chave de API (null para Ollama local)
+  timeout_seconds: 30
+  max_retries: 2
+
+relay:
+  url: ws://localhost:8765     # URL do relay para 'sym_shell attach'
+  port: 8765                   # porta do relay para 'sym_shell share'
+  tls: false                   # TLS obrigatório (true em produção)
+
+redaction:
+  default_profile: prod        # dev (permissivo) | prod (restritivo)
+"""
+
+
 class ConfigLoader:
     """
     Carrega ``~/.sym_shell/config.yaml`` e faz merge com os defaults.
 
     Se o arquivo não existir, retorna config com todos os defaults.
     Se uma chave estiver ausente no arquivo, o default é usado.
+    Na primeira execução, cria o diretório e um ``config.yaml.example``.
     """
 
     def __init__(self, config_path: Path | None = None) -> None:
         self._path = config_path or Path.home() / ".sym_shell" / "config.yaml"
 
+    def ensure_config_dir(self) -> None:
+        """Cria ~/.sym_shell/ e config.yaml.example se não existirem (best-effort)."""
+        try:
+            cfg_dir = self._path.parent
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            example = cfg_dir / "config.yaml.example"
+            if not example.exists():
+                example.write_text(_CONFIG_EXAMPLE, encoding="utf-8")
+        except (OSError, PermissionError):
+            pass
+
     def load(self) -> SymShellConfig:
+        self.ensure_config_dir()
         raw: dict[str, Any] = {}
         if self._path.exists():
             with self._path.open("r", encoding="utf-8") as fh:
