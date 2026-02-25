@@ -11,10 +11,14 @@ mvp_delivered: false
 current_phase: ft_mdd        # ft_mdd | ft_plan | ft_tdd | ft_delivery | ft_e2e | ft_feedback
 current_cycle: cycle-01      # ex.: cycle-01
 
-last_completed_step: null    # ex.: ft.mdd.01.hipotese
-next_recommended_step: ft.mdd.01.hipotese
+last_completed_step: ft.plan.01.task_list
+next_recommended_step: ft.tdd.01.selecao
 
-completed_steps: []          # lista de step IDs concluídos
+completed_steps:
+  - ft.mdd.01.hipotese
+  - ft.mdd.02.prd
+  - ft.mdd.03.validacao
+  - ft.plan.01.task_list
 
 blocked: false
 blocked_reason: null
@@ -23,5 +27,5 @@ blocked_reason: null
 metricas:
   tokens_consumidos: 0
   horas_consumidas: 0
-  data_inicio: null
+  data_inicio: "2026-02-25"
   ciclos_completos: 0
