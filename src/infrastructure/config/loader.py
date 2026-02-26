@@ -54,7 +54,7 @@ class LLMConfig:
 
 @dataclass
 class RelayConfig:
-    url: str = "ws://localhost:8060"
+    url: str = "wss://relay.palhano.services"
     port: int = 8060
     tls: bool = False
     cert_file: str | None = None   # caminho para o certificado TLS (servidor)
@@ -130,7 +130,7 @@ llm:
   max_retries: 2
 
 relay:
-  url: ws://localhost:8060     # URL do relay para 'forge_shell attach' (ws:// ou wss://)
+  url: wss://relay.palhano.services  # URL do relay para 'forge_shell attach' (ws:// ou wss://)
   port: 8060                   # porta do relay para 'forge_shell share'
   tls: false                   # TLS ativo (true → wss://, requer cert_file + key_file)
   # cert_file: /etc/forge_shell/server.crt   # certificado TLS do servidor (PEM)
@@ -217,7 +217,7 @@ class ConfigLoader:
 
         relay_raw = raw.get("relay", {})
         relay = RelayConfig(
-            url=relay_raw.get("url", "ws://localhost:8060"),
+            url=relay_raw.get("url", "wss://relay.palhano.services"),
             port=relay_raw.get("port", 8060),
             tls=relay_raw.get("tls", False),
             cert_file=relay_raw.get("cert_file", None),

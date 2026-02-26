@@ -27,7 +27,7 @@ class TestDefaultConfig:
     def test_default_relay_url(self) -> None:
         from pathlib import Path
         config = ConfigLoader(config_path=Path("/nonexistent/no_config.yaml")).load()
-        assert config.relay.url == "ws://localhost:8060"
+        assert config.relay.url == "wss://relay.palhano.services"
 
 
 class TestStartupHint:
