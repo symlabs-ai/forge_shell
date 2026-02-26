@@ -11,6 +11,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 
+class ClientRole(str, Enum):
+    HOST = "host"
+    VIEWER = "viewer"
+    AGENT = "agent"
+
+
 class MessageType(str, Enum):
     TERMINAL_OUTPUT = "terminal_output"
     CHAT = "chat"

@@ -15,6 +15,7 @@ from src.infrastructure.collab.relay_handler import RelayHandler
 from src.infrastructure.collab.host_relay_client import HostRelayClient
 from src.infrastructure.collab.viewer_client import ViewerClient
 from src.infrastructure.collab.protocol import MessageType
+from src.infrastructure.collab.agent_client import AgentClient
 
 
 @pytest.fixture
@@ -233,3 +234,194 @@ class TestViewerClient:
 
         await asyncio.gather(run_viewer(), run_host())
         assert b"VIEWER_TEST" in b"".join(received)
+
+
+class TestAgentRole:
+    async def test_agent_connects_and_receives_output(self, relay) -> None:
+        handler, port = relay
+        received = []
+
+        async def run_agent():
+            agent = AgentClient(
+                relay_url=f"ws://127.0.0.1:{port}",
+                session_id="s-agent-out",
+                token="tok-agent",
+            )
+            await agent.connect(on_output=lambda data: received.append(data))
+            await asyncio.sleep(0.5)
+            await agent.close()
+
+        async def run_host():
+            await asyncio.sleep(0.1)
+            client = HostRelayClient(
+                relay_url=f"ws://127.0.0.1:{port}",
+                session_id="s-agent-out",
+                token="tok-agent",
+            )
+            await client.connect()
+            await asyncio.sleep(0.05)
+            await client.send_output(b"AGENT_SEES_THIS")
+            await asyncio.sleep(0.2)
+            await client.close()
+
+        await asyncio.gather(run_agent(), run_host())
+        assert b"AGENT_SEES_THIS" in b"".join(received)
+
+    async def test_agent_sends_suggest_to_host(self, relay) -> None:
+        handler, port = relay
+        import websockets
+        host_received = []
+
+        async def run_host():
+            async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
+                await ws.send(json.dumps({
+                    "type": "session_join",
+                    "session_id": "s-suggest",
+                    "payload": {"role": "host", "token": "tok-sug"},
+                }).encode())
+                try:
+                    msg = await asyncio.wait_for(ws.recv(), timeout=1.5)
+                    host_received.append(json.loads(msg))
+                except asyncio.TimeoutError:
+                    pass
+
+        async def run_agent():
+            await asyncio.sleep(0.1)
+            agent = AgentClient(
+                relay_url=f"ws://127.0.0.1:{port}",
+                session_id="s-suggest",
+                token="tok-sug",
+            )
+            await agent.connect()
+            await asyncio.sleep(0.05)
+            await agent.send_suggest(["ls -la"], "listar arquivos", "LOW")
+            await asyncio.sleep(0.2)
+            await agent.close()
+
+        await asyncio.gather(run_host(), run_agent())
+        assert len(host_received) > 0
+        msg = host_received[0]
+        assert msg["type"] == "suggest"
+        assert msg["payload"]["commands"] == ["ls -la"]
+        assert msg["payload"]["risk_level"] == "LOW"
+
+    async def test_viewer_does_not_receive_suggest(self, relay) -> None:
+        handler, port = relay
+        import websockets
+        viewer_received = []
+
+        async def run_host():
+            async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
+                await ws.send(json.dumps({
+                    "type": "session_join",
+                    "session_id": "s-no-sug",
+                    "payload": {"role": "host", "token": "tok-ns"},
+                }).encode())
+                # Consume the suggest message so it doesn't block
+                try:
+                    await asyncio.wait_for(ws.recv(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    pass
+
+        async def run_viewer():
+            async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
+                await ws.send(json.dumps({
+                    "type": "session_join",
+                    "session_id": "s-no-sug",
+                    "payload": {"role": "viewer", "token": "tok-ns"},
+                }).encode())
+                try:
+                    msg = await asyncio.wait_for(ws.recv(), timeout=0.5)
+                    viewer_received.append(json.loads(msg))
+                except asyncio.TimeoutError:
+                    pass
+
+        async def run_agent():
+            await asyncio.sleep(0.1)
+            agent = AgentClient(
+                relay_url=f"ws://127.0.0.1:{port}",
+                session_id="s-no-sug",
+                token="tok-ns",
+            )
+            await agent.connect()
+            await asyncio.sleep(0.05)
+            await agent.send_suggest(["rm -rf /"], "destruir tudo", "HIGH")
+            await asyncio.sleep(0.3)
+            await agent.close()
+
+        await asyncio.gather(run_host(), run_viewer(), run_agent())
+        # Viewer should NOT have received the suggest
+        suggest_msgs = [m for m in viewer_received if m.get("type") == "suggest"]
+        assert len(suggest_msgs) == 0
+
+    async def test_host_receives_suggest_from_agent(self, relay) -> None:
+        """Host com receive loop (on_suggest) recebe suggest do agent."""
+        handler, port = relay
+        host_suggestions = []
+
+        async def run_host():
+            client = HostRelayClient(
+                relay_url=f"ws://127.0.0.1:{port}",
+                session_id="s-host-recv",
+                token="tok-hr",
+            )
+            await client.connect(on_suggest=lambda p: host_suggestions.append(p))
+            await asyncio.sleep(0.5)
+            await client.close()
+
+        async def run_agent():
+            await asyncio.sleep(0.1)
+            agent = AgentClient(
+                relay_url=f"ws://127.0.0.1:{port}",
+                session_id="s-host-recv",
+                token="tok-hr",
+            )
+            await agent.connect()
+            await asyncio.sleep(0.05)
+            await agent.send_suggest(["echo hello"], "test suggest", "LOW")
+            await asyncio.sleep(0.2)
+            await agent.close()
+
+        await asyncio.gather(run_host(), run_agent())
+        assert len(host_suggestions) > 0
+        assert host_suggestions[0]["commands"] == ["echo hello"]
+        assert host_suggestions[0]["risk_level"] == "LOW"
+
+    async def test_agent_auth_validates_token(self, relay) -> None:
+        handler, port = relay
+        import websockets
+
+        # Host registers with a token
+        async with websockets.connect(f"ws://127.0.0.1:{port}") as host_ws:
+            await host_ws.send(json.dumps({
+                "type": "session_join",
+                "session_id": "s-auth-agent",
+                "payload": {"role": "host", "token": "correct-token"},
+            }).encode())
+            await asyncio.sleep(0.05)
+
+        # Agent with wrong token should be rejected
+        async with websockets.connect(f"ws://127.0.0.1:{port}") as agent_ws:
+            await agent_ws.send(json.dumps({
+                "type": "session_join",
+                "session_id": "s-auth-agent",
+                "payload": {"role": "agent", "token": "wrong-token"},
+            }).encode())
+            try:
+                raw = await asyncio.wait_for(agent_ws.recv(), timeout=1.0)
+                msg = json.loads(raw)
+                assert msg["type"] == "error"
+                assert "Token" in msg["payload"]["message"]
+            except asyncio.TimeoutError:
+                pytest.fail("Expected error message for invalid token")
+
+
+class TestAgentCLIParser:
+    def test_agent_cli_parser_exists(self) -> None:
+        """Parser aceita 'agent MACHINE_CODE SENHA'."""
+        from src.adapters.cli.main import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["agent", "123-456-789", "654321"])
+        assert args.command == "agent"
+        assert args.machine_code == "123-456-789"
+        assert args.password == "654321"

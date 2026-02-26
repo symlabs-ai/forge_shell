@@ -41,6 +41,7 @@ from src.infrastructure.intelligence.risk_engine import RiskEngine
 from src.infrastructure.audit.audit_logger import AuditLogger
 from src.infrastructure.collab.relay_handler import RelayHandler
 from src.infrastructure.collab.relay_bridge import RelayBridge
+from src.infrastructure.collab.agent_client import AgentClient
 from src.infrastructure.intelligence.redaction import Redactor
 
 
@@ -108,6 +109,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Código da máquina host (ex: 497-051-961)",
     )
     attach_parser.add_argument(
+        "password",
+        metavar="SENHA",
+        help="Senha de sessão (6 dígitos, exibida pelo 'forge_shell share')",
+    )
+
+    # agent
+    agent_parser = subparsers.add_parser(
+        "agent",
+        help="Conectar como agent de IA a uma sessão forge_shell em andamento",
+        description=(
+            "Conecta ao terminal remoto como agent. Recebe output do PTY em stdout "
+            "(raw bytes) e lê sugestões de stdin como JSON (uma por linha). "
+            "Formato: {\"commands\":[\"cmd\"],\"explanation\":\"...\",\"risk_level\":\"LOW\"}"
+        ),
+    )
+    agent_parser.add_argument(
+        "machine_code",
+        metavar="MACHINE_CODE",
+        help="Código da máquina host (ex: 497-051-961)",
+    )
+    agent_parser.add_argument(
         "password",
         metavar="SENHA",
         help="Senha de sessão (6 dígitos, exibida pelo 'forge_shell share')",
@@ -337,6 +359,59 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             asyncio.run(_viewer_loop())
+        except KeyboardInterrupt:
+            pass
+        return 0
+
+    if args.command == "agent":
+        config = ConfigLoader().load()
+        relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
+        ssl_ctx = _build_ssl_client_context(config.relay.tls)
+
+        print(f"[forge_shell agent] Conectando à máquina: {args.machine_code}", file=sys.stderr)
+        print(f"[forge_shell agent] stdin: JSON suggest (uma linha por sugestão)", file=sys.stderr)
+        print(f"[forge_shell agent] stdout: PTY output (raw bytes)", file=sys.stderr)
+        print(f"[forge_shell agent] Ctrl+C para encerrar", file=sys.stderr)
+
+        agent = AgentClient(
+            relay_url=relay_url,
+            session_id=args.machine_code,
+            token=args.password,
+            ssl=ssl_ctx,
+        )
+
+        def _on_agent_output(data: bytes) -> None:
+            sys.stdout.buffer.write(data)
+            sys.stdout.buffer.flush()
+
+        async def _agent_loop() -> None:
+            await agent.connect(on_output=_on_agent_output)
+            try:
+                loop = asyncio.get_event_loop()
+                while True:
+                    line = await loop.run_in_executor(None, sys.stdin.readline)
+                    if not line:
+                        break
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        import json
+                        payload = json.loads(line)
+                    except (ValueError, TypeError):
+                        print(f"[forge_shell agent] JSON inválido: {line}", file=sys.stderr)
+                        continue
+                    commands = payload.get("commands", [])
+                    explanation = payload.get("explanation", "")
+                    risk_level = payload.get("risk_level", "LOW")
+                    await agent.send_suggest(commands, explanation, risk_level)
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                pass
+            finally:
+                await agent.close()
+
+        try:
+            asyncio.run(_agent_loop())
         except KeyboardInterrupt:
             pass
         return 0

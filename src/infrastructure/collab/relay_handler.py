@@ -69,7 +69,8 @@ class RelayHandler:
         """Intercepta HTTP antes do upgrade WebSocket — health check."""
         if request.path == "/health":
             active = sum(1 for s in _sessions.values() if s.get("host"))
-            body = json.dumps({"status": "ok", "active_sessions": active})
+            agents = sum(len(s.get("agent", [])) for s in _sessions.values())
+            body = json.dumps({"status": "ok", "active_sessions": active, "active_agents": agents})
             return connection.respond(HTTPStatus.OK, body + "\n")
 
     def stop(self) -> None:
@@ -96,13 +97,15 @@ class RelayHandler:
                     if role == "host":
                         # Registrar sessão e armazenar token do host
                         if session_id not in _sessions:
-                            _sessions[session_id] = {"host": [], "viewer": []}
+                            _sessions[session_id] = {"host": [], "viewer": [], "agent": []}
+                        elif "agent" not in _sessions[session_id]:
+                            _sessions[session_id]["agent"] = []
                         _sessions[session_id][role].append(ws)
                         if token:
                             _session_tokens[session_id] = token
                         log.debug("RelayHandler: %s joined %s as host", id(ws), session_id)
 
-                    elif role == "viewer":
+                    elif role in ("viewer", "agent"):
                         # Validar token se o host registrou um
                         registered_token = _session_tokens.get(session_id)
                         if registered_token and token != registered_token:
@@ -113,26 +116,42 @@ class RelayHandler:
                             await ws.close()
                             return
                         if session_id not in _sessions:
-                            _sessions[session_id] = {"host": [], "viewer": []}
+                            _sessions[session_id] = {"host": [], "viewer": [], "agent": []}
+                        elif "agent" not in _sessions[session_id]:
+                            _sessions[session_id]["agent"] = []
                         _sessions[session_id][role].append(ws)
-                        log.debug("RelayHandler: %s joined %s as viewer", id(ws), session_id)
+                        log.debug("RelayHandler: %s joined %s as %s", id(ws), session_id, role)
 
                 elif msg_type == "terminal_output" and role == "host":
-                    # broadcast para todos os viewers da sessão
-                    viewers = _sessions.get(session_id, {}).get("viewer", [])
+                    # broadcast para todos os viewers e agents da sessão
+                    session = _sessions.get(session_id, {})
+                    for peer_role in ("viewer", "agent"):
+                        peers = session.get(peer_role, [])
+                        dead = []
+                        for pws in list(peers):
+                            try:
+                                await pws.send(raw)
+                            except Exception:
+                                dead.append(pws)
+                        for pws in dead:
+                            peers.remove(pws)
+
+                elif msg_type == "suggest" and role == "agent":
+                    # forward suggest apenas para hosts da sessão
+                    hosts = _sessions.get(session_id, {}).get("host", [])
                     dead = []
-                    for vws in list(viewers):
+                    for hws in list(hosts):
                         try:
-                            await vws.send(raw)
+                            await hws.send(raw)
                         except Exception:
-                            dead.append(vws)
-                    for vws in dead:
-                        viewers.remove(vws)
+                            dead.append(hws)
+                    for hws in dead:
+                        hosts.remove(hws)
 
                 elif msg_type == "chat":
-                    # broadcast para todos (host + viewers)
+                    # broadcast para todos (host + viewers + agents)
                     session = _sessions.get(session_id, {})
-                    all_ws = session.get("host", []) + session.get("viewer", [])
+                    all_ws = session.get("host", []) + session.get("viewer", []) + session.get("agent", [])
                     for peer in list(all_ws):
                         if peer is not ws:
                             try:

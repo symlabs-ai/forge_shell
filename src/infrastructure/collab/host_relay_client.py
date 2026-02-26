@@ -10,6 +10,7 @@ import asyncio
 import base64
 import json
 import logging
+from typing import Callable
 
 try:
     import websockets
@@ -42,8 +43,12 @@ class HostRelayClient:
         self._token = token
         self._ssl = ssl
         self._ws = None
+        self._task: asyncio.Task | None = None
 
-    async def connect(self) -> None:
+    async def connect(
+        self,
+        on_suggest: Callable[[dict], None] | None = None,
+    ) -> None:
         if websockets is None:
             raise RuntimeError("websockets não instalado")
         kwargs = {}
@@ -56,6 +61,9 @@ class HostRelayClient:
             "session_id": self._session_id,
             "payload": {"role": "host", "token": self._token},
         }).encode())
+        # iniciar loop de recepção em background
+        if on_suggest is not None:
+            self._task = asyncio.create_task(self._receive_loop(on_suggest))
 
     async def send_output(self, data: bytes) -> None:
         """Enviar chunk de PTY output para o relay (codificado em base64)."""
@@ -68,7 +76,30 @@ class HostRelayClient:
         })
         await self._ws.send(msg.encode())
 
+    async def _receive_loop(
+        self,
+        on_suggest: Callable[[dict], None],
+    ) -> None:
+        if self._ws is None:
+            return
+        try:
+            async for raw in self._ws:
+                try:
+                    msg = json.loads(raw)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if msg.get("type") == "suggest":
+                    on_suggest(msg.get("payload", {}))
+        except Exception as exc:
+            log.debug("HostRelayClient: receive loop encerrado (%s)", exc)
+
     async def close(self) -> None:
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except (asyncio.CancelledError, Exception):
+                pass
         if self._ws is not None:
             await self._ws.close()
             self._ws = None

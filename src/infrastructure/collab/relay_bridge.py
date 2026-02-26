@@ -43,6 +43,7 @@ class RelayBridge:
         self._token = token
         self._ssl = ssl
         self._queue: queue.Queue[bytes | None] = queue.Queue()
+        self._suggest_queue: queue.Queue[dict] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._started = False
@@ -69,6 +70,13 @@ class RelayBridge:
         """Enfileira dados para envio ao relay (thread-safe, síncrono)."""
         self._queue.put(data)
 
+    def get_suggest(self) -> dict | None:
+        """Poll non-blocking para sugestões recebidas do agent (thread-safe)."""
+        try:
+            return self._suggest_queue.get_nowait()
+        except queue.Empty:
+            return None
+
     def _run_loop(self) -> None:
         """Loop asyncio que corre na thread background."""
         asyncio.run(self._async_loop())
@@ -80,8 +88,12 @@ class RelayBridge:
             token=self._token,
             ssl=self._ssl,
         )
+
+        def _on_suggest(payload: dict) -> None:
+            self._suggest_queue.put_nowait(payload)
+
         try:
-            await client.connect()
+            await client.connect(on_suggest=_on_suggest)
         except Exception as exc:
             log.debug("RelayBridge: falha ao conectar: %s", exc)
             return

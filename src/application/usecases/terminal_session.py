@@ -367,6 +367,54 @@ class TerminalSession:
             return
 
     # ------------------------------------------------------------------
+    # Agent suggest display
+    # ------------------------------------------------------------------
+
+    def _handle_agent_suggest(self, payload: dict) -> None:
+        """Renderiza sugestão recebida de um agent remoto."""
+        out = self._stdout or getattr(sys.stdout, "buffer", None)
+        if out is None:
+            return
+
+        commands = payload.get("commands", [])
+        explanation = payload.get("explanation", "")
+        risk_level = payload.get("risk_level", "LOW").upper()
+
+        # Cor do risco
+        if risk_level == "LOW":
+            risk_color = b"\033[1;32m"   # verde
+        elif risk_level == "MEDIUM":
+            risk_color = b"\033[1;33m"   # amarelo
+        else:
+            risk_color = b"\033[1;31m"   # vermelho
+
+        cmd_str = " && ".join(commands) if commands else ""
+
+        lines = [b"\r\n"]
+        # Prefix [Agent] em magenta
+        lines.append(b"\033[1;35m[Agent]\033[0m ")
+        if cmd_str:
+            lines.append(cmd_str.encode() + b"\r\n")
+        if explanation:
+            lines.append(b"   " + explanation.encode() + b"\r\n")
+        lines.append(b"   Risco: " + risk_color + risk_level.encode() + b"\033[0m\r\n")
+
+        if risk_level in ("LOW", "MEDIUM"):
+            lines.append(b"\033[2m   Enter para executar  \xc2\xb7  Ctrl-C para cancelar\033[0m\r\n")
+        else:
+            lines.append(b"\033[1;31m   [!] Risco ALTO \xe2\x80\x94 digite o comando manualmente.\033[0m\r\n")
+
+        lines.append(b"\r\n")
+
+        for line in lines:
+            out.write(line)
+        out.flush()
+
+        # LOW/MEDIUM: injeta comando no PTY para user revisar (Enter para executar)
+        if risk_level in ("LOW", "MEDIUM") and cmd_str:
+            self._engine.write(cmd_str.encode())
+
+    # ------------------------------------------------------------------
     # Context helpers
     # ------------------------------------------------------------------
 
@@ -549,6 +597,12 @@ class TerminalSession:
                         self._handle_intercept_result(result)
                     except queue.Empty:
                         pass
+
+                # Drena sugestões do agent via relay
+                if self._relay_bridge is not None:
+                    suggestion = self._relay_bridge.get_suggest()
+                    if suggestion is not None:
+                        self._handle_agent_suggest(suggestion)
         finally:
             self._engine.restore_stdin()
             self._engine.close()
