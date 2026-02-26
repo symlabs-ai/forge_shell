@@ -112,6 +112,10 @@ class NLModeEngine:
         if self._state == NLModeState.BASH_ACTIVE:
             return NLResult(bash_command=stripped)
 
+        # --- shell builtins: sempre passthrough sem LLM ---
+        if stripped in {"exit", "logout"}:
+            return NLResult(bash_command=stripped)
+
         # --- NL Mode: envia ao ForgeLLM ---
         response = self._adapter.request(text=text, context=context, on_chunk=on_chunk)
 

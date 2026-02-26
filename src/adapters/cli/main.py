@@ -23,6 +23,9 @@ import sys
 logging.getLogger("forge_llm").setLevel(logging.CRITICAL)
 logging.getLogger("httpx").setLevel(logging.CRITICAL)
 logging.getLogger("httpcore").setLevel(logging.CRITICAL)
+logging.getLogger("websockets").setLevel(logging.CRITICAL)
+logging.getLogger("websockets.server").setLevel(logging.CRITICAL)
+logging.getLogger("websockets.legacy").setLevel(logging.CRITICAL)
 logging.getLogger().handlers = []  # remove root StreamHandler → sem ruído no PTY
 
 from src.application.usecases.terminal_session import TerminalSession
@@ -66,24 +69,17 @@ def build_parser() -> argparse.ArgumentParser:
     # share
     share_parser = subparsers.add_parser(
         "share",
-        help="Iniciar sessão compartilhada via relay e exibir token de acesso",
+        help="Iniciar sessão compartilhada via relay e exibir código + senha",
         description=(
-            "Inicia o sym_shell em modo compartilhado. Conecta ao relay intermediário, "
-            "registra a sessão e exibe o token/link para participantes remotos. "
-            "Indicador 'Sessão compartilhada: ATIVA' é exibido no terminal enquanto ativo."
+            "Inicia o sym_shell em modo compartilhado. Exibe o código da máquina "
+            "(persistente) e a senha de sessão (efêmera) para o viewer conectar. "
+            "Viewer usa: sym_shell attach <código> <senha>."
         ),
     )
     share_parser.add_argument(
-        "--relay",
-        metavar="URL",
-        help="URL do relay intermediário (padrão: valor de config.yaml)",
-    )
-    share_parser.add_argument(
-        "--expire",
-        metavar="MINUTOS",
-        type=int,
-        default=60,
-        help="Tempo de expiração do token em minutos (padrão: 60)",
+        "--regen",
+        action="store_true",
+        help="Regenerar o código da máquina (novo código permanente)",
     )
 
     # doctor
@@ -100,23 +96,21 @@ def build_parser() -> argparse.ArgumentParser:
     # attach
     attach_parser = subparsers.add_parser(
         "attach",
-        help="Reconectar a uma sessão sym_shell existente pelo session-id",
+        help="Conectar como viewer a uma sessão sym_shell em andamento",
         description=(
-            "Reconecta a uma sessão sym_shell em execução identificada pelo session-id. "
-            "O estado da sessão é mantido no host; o relay recupera e transmite ao client. "
-            "Use 'sym_shell share' para obter o session-id de uma sessão ativa."
+            "Conecta ao terminal remoto de uma sessão sym_shell ativa. "
+            "Use o código da máquina e a senha exibidos pelo 'sym_shell share' no host."
         ),
     )
     attach_parser.add_argument(
-        "session_id",
-        metavar="SESSION_ID",
-        help="ID da sessão a reconectar (fornecido pelo 'sym_shell share')",
+        "machine_code",
+        metavar="MACHINE_CODE",
+        help="Código da máquina host (ex: 497-051-961)",
     )
     attach_parser.add_argument(
-        "--token",
-        metavar="TOKEN",
-        default="",
-        help="Token de autenticação da sessão (fornecido pelo 'sym_shell share')",
+        "password",
+        metavar="SENHA",
+        help="Senha de sessão (6 dígitos, exibida pelo 'sym_shell share')",
     )
 
     # config
@@ -225,20 +219,23 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "share":
         config = ConfigLoader().load()
+        from src.infrastructure.collab import machine_id as _machine_id
+        if getattr(args, "regen", False):
+            machine_code = _machine_id.regenerate()
+            print(f"[sym_shell] Código da máquina regerado.")
+        else:
+            machine_code = _machine_id.load_or_create()
         sm = SessionManager()
+        password = sm.generate_password(config.collab.permanent_password)
         uc = ShareSession(session_manager=sm)
-        expire = getattr(args, "expire", 60) or 60
-        result = uc.run(host_id="local", expire_minutes=expire)
+        result = uc.run(host_id="local", machine_code=machine_code, password=password)
 
-        relay_url = getattr(args, "relay", None) or config.relay.url
-        session_id = result["session_id"]
-        token = result["token"]
+        relay_url = config.relay.url
 
         print(f"[sym_shell] Sessão compartilhada iniciada")
-        print(f"  Session ID : {session_id}")
-        print(f"  Token      : {token}")
-        print(f"  Expira em  : {result['expires_at']}")
-        print(f"  Relay URL  : {relay_url}")
+        print(f"  Código da máquina : {result['machine_code']}")
+        print(f"  Senha de sessão   : {result['password']}")
+        print(f"  Relay URL         : {relay_url}")
 
         # Iniciar RelayHandler em thread background
         ssl_server_ctx = _build_ssl_server_context(
@@ -257,8 +254,8 @@ def main(argv: list[str] | None = None) -> int:
         ssl_client_ctx = _build_ssl_client_context(config.relay.tls)
         bridge = RelayBridge(
             relay_url=relay_url_tls,
-            session_id=session_id,
-            token=token,
+            session_id=result["machine_code"],
+            token=result["password"],
             ssl=ssl_client_ctx,
         )
         bridge.start()
@@ -286,15 +283,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "attach":
         config = ConfigLoader().load()
-        token = getattr(args, "token", "") or ""
         relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
-        print(f"[sym_shell] Conectando à sessão: {args.session_id}")
+        print(f"[sym_shell] Conectando à máquina: {args.machine_code}")
         print(f"[sym_shell] Use Ctrl+C para encerrar a visualização")
         ssl_ctx = _build_ssl_client_context(config.relay.tls)
         viewer = ViewerClient(
             relay_url=relay_url,
-            session_id=args.session_id,
-            token=token,
+            session_id=args.machine_code,
+            token=args.password,
             ssl=ssl_ctx,
         )
 

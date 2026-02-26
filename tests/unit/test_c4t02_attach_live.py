@@ -25,7 +25,7 @@ class TestAttachLive:
         mock_vc = self._make_mock_vc()
         with patch("src.adapters.cli.main.ViewerClient", return_value=mock_vc) as MockVC:
             from src.adapters.cli.main import main
-            rc = main(["attach", "s-test"])
+            rc = main(["attach", "497-051-961", "123456"])
         assert mock_vc.connect.called, "viewer.connect() deve ser chamado"
 
     def test_attach_calls_viewer_close_on_exit(self) -> None:
@@ -33,7 +33,7 @@ class TestAttachLive:
         mock_vc = self._make_mock_vc()
         with patch("src.adapters.cli.main.ViewerClient", return_value=mock_vc):
             from src.adapters.cli.main import main
-            main(["attach", "s-test"])
+            main(["attach", "497-051-961", "123456"])
         assert mock_vc.close.called, "viewer.close() deve ser chamado"
 
     def test_attach_uses_relay_url_from_config(self, tmp_path) -> None:
@@ -49,7 +49,7 @@ class TestAttachLive:
             )
             MockCL.return_value.load.return_value = mock_config
             from src.adapters.cli.main import main
-            main(["attach", "s-test"])
+            main(["attach", "497-051-961", "123456"])
         # ViewerClient deve ter sido instanciado com a URL do config
         call_kwargs = MockVC.call_args
         assert "ws://custom-relay:9999" in str(call_kwargs)
@@ -59,7 +59,7 @@ class TestAttachLive:
         mock_vc = self._make_mock_vc()
         with patch("src.adapters.cli.main.ViewerClient", return_value=mock_vc):
             from src.adapters.cli.main import main
-            rc = main(["attach", "s-test"])
+            rc = main(["attach", "497-051-961", "123456"])
         assert rc == 0
 
     def test_attach_graceful_on_keyboard_interrupt(self) -> None:
@@ -68,6 +68,6 @@ class TestAttachLive:
         mock_vc.wait = AsyncMock(side_effect=KeyboardInterrupt)
         with patch("src.adapters.cli.main.ViewerClient", return_value=mock_vc):
             from src.adapters.cli.main import main
-            rc = main(["attach", "s-test"])
+            rc = main(["attach", "497-051-961", "123456"])
         assert rc == 0
         assert mock_vc.close.called

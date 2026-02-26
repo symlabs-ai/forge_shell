@@ -30,7 +30,7 @@ class TestShareRelayWired:
              patch("src.adapters.cli.main.NLModeEngine"), \
              patch("src.adapters.cli.main.RiskEngine"):
             MockSS.return_value.run.return_value = {
-                "session_id": "s-x", "token": "t-x", "expires_at": "2026-01-01"
+                "machine_code": "111-222-333", "password": "000000"
             }
             mock_session = MagicMock()
             mock_session.run.return_value = 0
@@ -53,7 +53,7 @@ class TestShareRelayWired:
              patch("src.adapters.cli.main.NLModeEngine"), \
              patch("src.adapters.cli.main.RiskEngine"):
             MockSS.return_value.run.return_value = {
-                "session_id": "s-x", "token": "t-x", "expires_at": "2026-01-01"
+                "machine_code": "111-222-333", "password": "000000"
             }
             mock_session = MagicMock()
             mock_session.run.return_value = 0
@@ -63,7 +63,7 @@ class TestShareRelayWired:
         assert mock_session._relay_bridge == MockRB.return_value
 
     def test_share_shows_session_info(self, capsys) -> None:
-        """share deve continuar exibindo session_id e token."""
+        """share deve exibir machine_code e password."""
         with patch("src.adapters.cli.main.SessionManager"), \
              patch("src.adapters.cli.main.ShareSession") as MockSS, \
              patch("src.adapters.cli.main.RelayHandler"), \
@@ -75,11 +75,11 @@ class TestShareRelayWired:
              patch("src.adapters.cli.main.NLModeEngine"), \
              patch("src.adapters.cli.main.RiskEngine"):
             MockSS.return_value.run.return_value = {
-                "session_id": "s-demo", "token": "tok-demo", "expires_at": "2026-01-01"
+                "machine_code": "497-051-961", "password": "654321"
             }
             MockTS.return_value.run.return_value = 0
             from src.adapters.cli.main import main
             rc = main(["share"])
         captured = capsys.readouterr()
-        assert "s-demo" in captured.out
+        assert "497-051-961" in captured.out
         assert rc == 0

@@ -1,7 +1,7 @@
 """
-Testes — Viewer token auth (Feature 6)
-DADO sym_shell attach com --token
-QUANDO o viewer envia token correto/errado ao relay
+Testes — Viewer password auth
+DADO sym_shell attach com machine_code + password
+QUANDO o viewer envia password correta/errada ao relay
 ENTÃO acesso é permitido ou negado
 """
 import asyncio
@@ -15,23 +15,22 @@ from src.infrastructure.collab.relay_handler import RelayHandler
 from src.infrastructure.collab.viewer_client import ViewerClient
 
 
-class TestAttachTokenArgument:
-    def test_attach_has_token_argument(self) -> None:
+class TestAttachArguments:
+    def test_attach_has_machine_code_and_password(self) -> None:
         parser = build_parser()
-        args = parser.parse_args(["attach", "s-abc123", "--token", "mytoken"])
-        assert args.session_id == "s-abc123"
-        assert args.token == "mytoken"
+        args = parser.parse_args(["attach", "497-051-961", "321321"])
+        assert args.machine_code == "497-051-961"
+        assert args.password == "321321"
 
-    def test_attach_token_defaults_to_empty(self) -> None:
+    def test_attach_machine_code_stored_correctly(self) -> None:
         parser = build_parser()
-        args = parser.parse_args(["attach", "s-abc123"])
-        assert args.token == ""
+        args = parser.parse_args(["attach", "100-200-300", "000000"])
+        assert args.machine_code == "100-200-300"
 
-    def test_attach_token_long_value(self) -> None:
+    def test_attach_password_stored_correctly(self) -> None:
         parser = build_parser()
-        tok = "abc" * 20
-        args = parser.parse_args(["attach", "s-abc123", "--token", tok])
-        assert args.token == tok
+        args = parser.parse_args(["attach", "999-888-777", "654321"])
+        assert args.password == "654321"
 
 
 class TestRelayTokenValidation:

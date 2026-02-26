@@ -62,11 +62,17 @@ class RelayConfig:
 
 
 @dataclass
+class CollabConfig:
+    permanent_password: str | None = None   # senha fixa entre sessões (None = efêmera)
+
+
+@dataclass
 class SymShellConfig:
     nl_mode: NLModeConfig = field(default_factory=NLModeConfig)
     redaction: RedactionConfig = field(default_factory=RedactionConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     relay: RelayConfig = field(default_factory=RelayConfig)
+    collab: CollabConfig = field(default_factory=CollabConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +135,9 @@ relay:
   tls: false                   # TLS ativo (true → wss://, requer cert_file + key_file)
   # cert_file: /etc/sym_shell/server.crt   # certificado TLS do servidor (PEM)
   # key_file:  /etc/sym_shell/server.key   # chave privada TLS do servidor (PEM)
+
+collab:
+  permanent_password: null     # senha fixa entre sessões (null = nova senha a cada share)
 
 redaction:
   default_profile: prod        # dev (permissivo) | prod (restritivo)
@@ -215,4 +224,9 @@ class ConfigLoader:
             key_file=relay_raw.get("key_file", None),
         )
 
-        return SymShellConfig(nl_mode=nl_mode, redaction=redaction, llm=llm, relay=relay)
+        collab_raw = raw.get("collab", {})
+        collab = CollabConfig(
+            permanent_password=collab_raw.get("permanent_password", None),
+        )
+
+        return SymShellConfig(nl_mode=nl_mode, redaction=redaction, llm=llm, relay=relay, collab=collab)

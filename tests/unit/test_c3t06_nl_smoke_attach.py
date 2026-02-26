@@ -86,7 +86,7 @@ class TestAttachWiredCLI:
         with patch("src.adapters.cli.main.ViewerClient") as MockVC:
             MockVC.return_value = self._make_mock_vc()
             from src.adapters.cli.main import main
-            rc = main(["attach", "s-test123"])
+            rc = main(["attach", "497-051-961", "123456"])
         captured = capsys.readouterr()
         assert rc == 0
 
@@ -94,5 +94,5 @@ class TestAttachWiredCLI:
         with patch("src.adapters.cli.main.ViewerClient") as MockVC:
             MockVC.return_value = self._make_mock_vc()
             from src.adapters.cli.main import main
-            rc = main(["attach", "s-abc"])
+            rc = main(["attach", "100-200-300", "654321"])
         assert rc == 0

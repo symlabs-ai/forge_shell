@@ -104,21 +104,18 @@ class TestShareSession:
 
     def test_share_returns_session_info(self) -> None:
         sm = MagicMock()
-        sm.create_session.return_value = MagicMock(
-            session_id="s-abc",
-            token="tok-xyz",
-        )
         uc = ShareSession(session_manager=sm)
-        result = uc.run(host_id="host-1", expire_minutes=60)
-        assert result["session_id"] == "s-abc"
-        assert result["token"] == "tok-xyz"
+        result = uc.run(host_id="host-1", machine_code="497-051-961", password="321321")
+        assert result["machine_code"] == "497-051-961"
+        assert result["password"] == "321321"
 
     def test_share_calls_session_manager(self) -> None:
         sm = MagicMock()
-        sm.create_session.return_value = MagicMock(session_id="s-1", token="t-1")
         uc = ShareSession(session_manager=sm)
-        uc.run(host_id="host-1", expire_minutes=30)
-        sm.create_session.assert_called_once_with(host_id="host-1", expire_minutes=30)
+        uc.run(host_id="host-1", machine_code="111-222-333", password="654321")
+        sm.create_session.assert_called_once_with(
+            host_id="host-1", machine_code="111-222-333", password="654321"
+        )
 
 
 class TestSuggestCard:

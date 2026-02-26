@@ -91,3 +91,21 @@ class TestNLModeInputProcessing:
         result = engine.process_input("ls -la", context={})
         assert result is not None
         assert result.bash_command == "ls -la"
+
+    def test_exit_in_nl_mode_bypasses_llm(self) -> None:
+        """exit nunca deve ir ao LLM — sai direto como bash command."""
+        adapter = MagicMock()
+        engine = NLModeEngine(llm_adapter=adapter, risk_engine=MagicMock())
+        result = engine.process_input("exit", context={})
+        assert result is not None
+        assert result.bash_command == "exit"
+        adapter.request.assert_not_called()
+
+    def test_logout_in_nl_mode_bypasses_llm(self) -> None:
+        """logout nunca deve ir ao LLM — sai direto como bash command."""
+        adapter = MagicMock()
+        engine = NLModeEngine(llm_adapter=adapter, risk_engine=MagicMock())
+        result = engine.process_input("logout", context={})
+        assert result is not None
+        assert result.bash_command == "logout"
+        adapter.request.assert_not_called()

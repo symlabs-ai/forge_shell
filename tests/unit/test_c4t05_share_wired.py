@@ -59,22 +59,21 @@ def _share_infra_patches():
 
 
 class TestShareCommandWired:
-    def test_share_shows_relay_url(self, capsys) -> None:
-        """share deve exibir a relay_url usada."""
+    def test_share_shows_machine_code_and_password(self, capsys) -> None:
+        """share deve exibir o machine_code e a password."""
         from src.adapters.cli.main import main
         with patch("src.adapters.cli.main.SessionManager"), \
              patch("src.adapters.cli.main.ShareSession") as MockSS, \
              patch.multiple("src.adapters.cli.main", **_share_infra_patches()):
             MockSS.return_value.run.return_value = {
-                "session_id": "s-share-test",
-                "token": "tok-abc",
-                "expires_at": "2026-02-25T02:00:00+00:00",
+                "machine_code": "497-051-961",
+                "password": "321321",
             }
             rc = main(["share"])
         captured = capsys.readouterr()
         assert rc == 0
-        assert "s-share-test" in captured.out
-        assert "tok-abc" in captured.out
+        assert "497-051-961" in captured.out
+        assert "321321" in captured.out
 
     def test_share_returns_0(self) -> None:
         from src.adapters.cli.main import main
@@ -82,7 +81,7 @@ class TestShareCommandWired:
              patch("src.adapters.cli.main.ShareSession") as MockSS, \
              patch.multiple("src.adapters.cli.main", **_share_infra_patches()):
             MockSS.return_value.run.return_value = {
-                "session_id": "s-x", "token": "t-x", "expires_at": "2026-01-01"
+                "machine_code": "111-222-333", "password": "000000"
             }
             rc = main(["share"])
         assert rc == 0

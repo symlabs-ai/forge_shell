@@ -1,8 +1,8 @@
 """
 ShareSession — usecase sym_shell share (T-29).
 
-Cria uma sessão de colaboração e retorna token + session_id para o host
-compartilhar com participantes.
+Cria uma sessão de colaboração e retorna machine_code + password para o host
+compartilhar com o viewer.
 """
 from __future__ import annotations
 
@@ -15,10 +15,11 @@ class ShareSession:
     def __init__(self, session_manager: SessionManager) -> None:
         self._sm = session_manager
 
-    def run(self, host_id: str, expire_minutes: int = 60) -> dict:
-        session = self._sm.create_session(host_id=host_id, expire_minutes=expire_minutes)
+    def run(self, host_id: str, machine_code: str, password: str) -> dict:
+        self._sm.create_session(
+            host_id=host_id, machine_code=machine_code, password=password
+        )
         return {
-            "session_id": session.session_id,
-            "token": session.token,
-            "expires_at": session.expires_at.isoformat(),
+            "machine_code": machine_code,
+            "password": password,
         }

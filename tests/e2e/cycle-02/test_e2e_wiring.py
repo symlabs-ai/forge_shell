@@ -45,15 +45,15 @@ _SHARE_REDESIGN = pytest.mark.xfail(
 
 class TestShareWiredE2E:
     @_SHARE_REDESIGN
-    def test_share_runs_and_shows_session_id(self) -> None:
+    def test_share_runs_and_shows_machine_code(self) -> None:
         rc, out, err = run("share")
         assert rc == 0
-        assert "s-" in out  # session_id começa com "s-"
+        assert "Código da máquina" in out or any(c.isdigit() for c in out)
 
     @_SHARE_REDESIGN
-    def test_share_shows_token(self) -> None:
+    def test_share_shows_password(self) -> None:
         rc, out, err = run("share")
-        assert "Token" in out or "token" in out.lower()
+        assert "Senha" in out or "password" in out.lower()
 
     @_SHARE_REDESIGN
     def test_share_no_longer_stub(self) -> None:

@@ -2,8 +2,8 @@
 SessionManager — gerencia sessões de colaboração remota do sym_shell.
 
 Responsabilidades:
-- Criar sessões com token de acesso com expiração
-- Validar tokens
+- Criar sessões identificadas pelo machine code + senha de sessão
+- Validar senhas
 - Gerenciar participantes e suas permissões (view-only, suggest-only)
 - Revogar sessões
 
@@ -12,7 +12,7 @@ O relay recupera o estado do host via protocolo definido em collab/protocol.py.
 """
 from __future__ import annotations
 
-import secrets
+import random
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from enum import Enum
@@ -57,19 +57,30 @@ class SessionManager:
         self._sessions: dict[str, Session] = {}
         self._token_index: dict[str, str] = {}  # token → session_id
 
-    def create_session(self, host_id: str, expire_minutes: int = 60) -> Session:
-        session_id = f"s-{secrets.token_hex(8)}"
-        token = secrets.token_urlsafe(32)
-        expires_at = datetime.now(tz=timezone.utc) + timedelta(minutes=expire_minutes)
+    @staticmethod
+    def generate_password(permanent: str | None = None) -> str:
+        """Gera senha de sessão (6 dígitos) ou retorna senha permanente configurada."""
+        if permanent:
+            return permanent
+        return f"{random.randint(0, 999999):06d}"
 
+    def create_session(
+        self,
+        host_id: str,
+        machine_code: str,
+        password: str,
+        expire_minutes: int = 1440,
+    ) -> Session:
+        """Cria sessão identificada pelo machine_code e autenticada pela password."""
+        expires_at = datetime.now(tz=timezone.utc) + timedelta(minutes=expire_minutes)
         session = Session(
-            session_id=session_id,
+            session_id=machine_code,
             host_id=host_id,
-            token=token,
+            token=password,
             expires_at=expires_at,
         )
-        self._sessions[session_id] = session
-        self._token_index[token] = session_id
+        self._sessions[machine_code] = session
+        self._token_index[password] = machine_code
         return session
 
     def get_session(self, session_id: str) -> Session | None:
