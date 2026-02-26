@@ -12,10 +12,24 @@ Modos:
 from __future__ import annotations
 
 import os
+import queue
+import re
 import select
 import signal
 import sys
+import termios
+import threading
+import time
 from enum import Enum
+
+# Log de timing para diagnóstico — escreve em /tmp/sym_shell_timing.log
+import logging
+_tlog = logging.getLogger("sym_shell.timing")
+_tlog.setLevel(logging.DEBUG)
+_tlog.propagate = False  # não vaza para o root logger (evita eco no PTY)
+_th = logging.FileHandler("/tmp/sym_shell_timing.log", mode="w")
+_th.setFormatter(logging.Formatter("%(asctime)s.%(msecs)03d  %(message)s", datefmt="%H:%M:%S"))
+_tlog.addHandler(_th)
 
 from src.infrastructure.config.loader import SymShellConfig
 from src.infrastructure.terminal_engine.pty_engine import PTYEngine
@@ -58,6 +72,20 @@ class TerminalSession:
         self._auditor = None        # injetado via DI; None = sem auditoria
         self._relay_bridge = None   # injetado via DI; None = sem relay streaming
         self._stdout = None         # injetado para testes; padrão: sys.stdout.buffer
+        self._nl_buffer: bytes = b""  # buffer de linha no NL Mode
+        self._llm_queue: queue.Queue = queue.Queue()  # resultados assíncronos do LLM
+        self._llm_pending: bool = False  # evita chamadas simultâneas
+        self._pty_running: bool = False  # True enquanto comando está em execução no PTY
+        self._in_password_entry: bool = False  # True após prompt de senha detectado
+
+    def _flush_pending_llm(self, timeout: float = 0.5) -> None:
+        """Drena resultado pendente do LLM. Usado em testes (sem select loop)."""
+        try:
+            result = self._llm_queue.get(timeout=timeout)
+            self._llm_pending = False
+            self._handle_intercept_result(result)
+        except queue.Empty:
+            pass
 
     @property
     def mode(self) -> SessionMode:
@@ -78,13 +106,96 @@ class TerminalSession:
             self._engine.write(data)
             return
 
+        # comando em execução: todo input vai direto para PTY (senha, confirmações, etc.)
+        if self._pty_running:
+            self._engine.write(data)
+            return
+
         if self._interceptor is not None:
-            result = self._interceptor.intercept(data)
-            self._handle_intercept_result(result)
+            self._buffer_nl_input(data)
             return
 
         # fallback: sem interceptor configurado, vai direto para PTY
         self._engine.write(data)
+
+    def _buffer_nl_input(self, data: bytes) -> None:
+        """Acumula input no NL Mode; só chama LLM quando Enter é pressionado."""
+        out = self._stdout or getattr(sys.stdout, "buffer", None)
+
+        # Backspace / DEL — remove último byte do buffer e apaga char na tela
+        if data in (b'\x7f', b'\x08'):
+            if self._nl_buffer:
+                self._nl_buffer = self._nl_buffer[:-1]
+                if out:
+                    out.write(b'\x08 \x08')
+                    out.flush()
+            return
+
+        # Ctrl-C — limpa buffer e envia ao PTY (interrompe bash)
+        if data == b'\x03':
+            self._nl_buffer = b""
+            self._engine.write(data)
+            return
+
+        # Enter (\r ou \n) — acumula prefixo antes do newline, dispara LLM em thread
+        if b'\r' in data or b'\n' in data:
+            t0 = time.monotonic()
+            idx_r = data.find(b'\r') if b'\r' in data else len(data)
+            idx_n = data.find(b'\n') if b'\n' in data else len(data)
+            pre = data[:min(idx_r, idx_n)]
+            if pre:
+                self._nl_buffer += pre
+            full = self._nl_buffer
+            self._nl_buffer = b""
+            _tlog.debug("ENTER received | full=%r | mode=%s | pty_running=%s | llm_pending=%s",
+                        full, self._mode, self._pty_running, self._llm_pending)
+            if out:
+                out.write(b'\r\n')
+                out.flush()
+            if full.strip() and not self._llm_pending:
+                stripped = full.strip().decode("utf-8", errors="replace")
+                is_toggle    = stripped == "!"
+                is_escape    = stripped.startswith("!") and len(stripped) > 1
+                is_bash_mode = self._mode == SessionMode.BASH
+                _tlog.debug("  path: toggle=%s escape=%s bash_mode=%s | stripped=%r",
+                            is_toggle, is_escape, is_bash_mode, stripped)
+                if is_toggle or is_escape or is_bash_mode:
+                    t1 = time.monotonic()
+                    result = self._interceptor.intercept(full)
+                    t2 = time.monotonic()
+                    _tlog.debug("  intercept() took %.3fs → action=%s", t2 - t1,
+                                result.action if result else None)
+                    self._handle_intercept_result(result)
+                    _tlog.debug("  handle_intercept_result() done, total=%.3fs", time.monotonic() - t0)
+                else:
+                    self._llm_pending = True
+                    _tlog.debug("  dispatching LLM thread for NL query")
+                    if out:
+                        out.write(b'\033[36m[sym_shell: pensando...]\033[0m\r\n')
+                        out.flush()
+                    interceptor = self._interceptor
+                    llm_q = self._llm_queue
+                    def _llm_thread(text: bytes) -> None:
+                        t_start = time.monotonic()
+                        try:
+                            res = interceptor.intercept(text)
+                        except Exception as e:
+                            _tlog.debug("  LLM thread exception: %s", e)
+                            res = None
+                        _tlog.debug("  LLM thread done in %.3fs", time.monotonic() - t_start)
+                        llm_q.put(res)
+                    threading.Thread(target=_llm_thread, args=(full,), daemon=True).start()
+            else:
+                _tlog.debug("  empty buffer Enter → passthrough to PTY")
+                self._pty_running = True
+                self._engine.write(b'\r')
+            return
+
+        # Caractere normal — acumula e faz echo local (não vai ao PTY)
+        self._nl_buffer += data
+        if out:
+            out.write(data)
+            out.flush()
 
     def _handle_intercept_result(self, result) -> None:
         """Processar resultado do NLInterceptor: executar comando, exibir sugestão ou indicador."""
@@ -99,6 +210,8 @@ class TerminalSession:
             cmd = (result.bash_command or "").strip()
             if cmd:
                 self._engine.write(cmd.encode() + b"\n")
+                # comando está rodando — input direto ao PTY (ex: senha de sudo)
+                self._pty_running = True
             return
 
         if result.action == InterceptAction.TOGGLE:
@@ -112,6 +225,11 @@ class TerminalSession:
             indicator = b"\r\n\033[33m[sym_shell: " + label + b"]\033[0m\r\n"
             if out:
                 out.write(indicator)
+                out.flush()
+            # Envia \r ao PTY para forçar novo prompt do bash (sem isso o usuário
+            # fica aguardando o prompt que nunca aparece automaticamente)
+            self._pty_running = True
+            self._engine.write(b"\r")
             return
 
         if result.action == InterceptAction.SHOW_SUGGESTION:
@@ -139,11 +257,13 @@ class TerminalSession:
                 lines.append(b"\033[1;31m[!] Risco ALTO \xe2\x80\x94 confirme digitando o comando manualmente.\033[0m\r\n")
                 lines.append(b"\r\n")
             else:
+                lines.append(b"\033[2m   Enter para executar  \xc2\xb7  Ctrl-C para cancelar\033[0m\r\n")
                 lines.append(b"\r\n")
 
             if out:
                 for line in lines:
                     out.write(line)
+                out.flush()
 
             if not requires_confirm and commands:
                 # risco baixo/médio: injeta no PTY para o usuário revisar e pressionar Enter
@@ -166,9 +286,44 @@ class TerminalSession:
         )
         out.write(hint)
 
+    _PROMPT_PATTERN = re.compile(rb'[\$#%]\s*$')
+    # Detecta prompts de senha do sudo/ssh/su/doas
+    # Ex: "[sudo] senha para palhano: ", "Password: ", "Enter passphrase for key '...': "
+    _PASSWORD_PROMPT = re.compile(
+        rb'(password|senha|passphrase|passcode|pass\s*phrase)[^\n]*:\s*$',
+        re.IGNORECASE,
+    )
+
     def _handle_pty_output(self, data: bytes) -> None:
         """Processar output do PTY: detectar alternate screen, auditar, relay e escrever em stdout."""
         self._detector.feed(data)
+        # Detecta prompt bash/zsh/fish no output → comando terminou, volta ao NL buffer
+        if self._pty_running:
+            stripped = re.sub(rb'\x1b\[[0-9;]*[mKHJA-Za-z]', b'', data)
+            if self._PROMPT_PATTERN.search(stripped):
+                self._pty_running = False
+
+        # Suprimir echo de senha: após detectar prompt de senha (sudo/ssh/su),
+        # suprimir todo output do PTY até que uma nova linha seja recebida.
+        if self._in_password_entry:
+            if b'\n' in data or b'\r' in data:
+                self._in_password_entry = False
+            # suprimir o echo dos caracteres da senha
+            return
+
+        # Detectar prompt de senha pelo padrão (ex: "[sudo] senha:", "Password:")
+        stripped_for_pwd = re.sub(rb'\x1b\[[0-9;]*[mKHJA-Za-z]', b'', data)
+        if self._PASSWORD_PROMPT.search(stripped_for_pwd):
+            self._in_password_entry = True
+            # exibir o próprio prompt mas suprimir o que vier depois dele neste chunk
+            prompt_match = self._PASSWORD_PROMPT.search(stripped_for_pwd)
+            # exibir até o fim do match no chunk (inclui o prompt + espaço final)
+            # para segurança exibimos tudo até aqui e suprimimos leituras seguintes
+            out = self._stdout or getattr(sys.stdout, "buffer", None)
+            if out is not None:
+                out.write(data)
+            return
+
         out = self._stdout or getattr(sys.stdout, "buffer", None)
         if out is not None:
             out.write(data)
@@ -247,6 +402,15 @@ class TerminalSession:
                                 self._stdout.flush()
                     except OSError:
                         break
+
+                # Drena resultado do LLM (thread assíncrona)
+                if self._llm_pending:
+                    try:
+                        result = self._llm_queue.get_nowait()
+                        self._llm_pending = False
+                        self._handle_intercept_result(result)
+                    except queue.Empty:
+                        pass
         finally:
             self._engine.restore_stdin()
             self._engine.close()

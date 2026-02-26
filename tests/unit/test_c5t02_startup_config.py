@@ -14,16 +14,19 @@ from src.infrastructure.config.loader import ConfigLoader
 
 class TestDefaultConfig:
     def test_default_model_is_llama32(self) -> None:
-        """Default model deve ser llama3.2, compatível com Ollama local."""
-        config = ConfigLoader().load()
+        """Default model deve ser llama3.2 quando não há config file."""
+        from pathlib import Path
+        config = ConfigLoader(config_path=Path("/nonexistent/no_config.yaml")).load()
         assert config.llm.model == "llama3.2"
 
     def test_default_provider_is_ollama(self) -> None:
-        config = ConfigLoader().load()
+        from pathlib import Path
+        config = ConfigLoader(config_path=Path("/nonexistent/no_config.yaml")).load()
         assert config.llm.provider == "ollama"
 
     def test_default_relay_url(self) -> None:
-        config = ConfigLoader().load()
+        from pathlib import Path
+        config = ConfigLoader(config_path=Path("/nonexistent/no_config.yaml")).load()
         assert config.relay.url == "ws://localhost:8765"
 
 

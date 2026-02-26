@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 from forge_llm import ChatAgent, ChatMessage
 
@@ -57,6 +58,13 @@ class ForgeLLMAdapter:
         max_retries: tentativas em caso de falha transiente
     """
 
+    _ENV_KEY_MAP = {
+        "xai": "XAI_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
+    }
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -65,7 +73,8 @@ class ForgeLLMAdapter:
         timeout_seconds: int = 30,
         max_retries: int = 2,
     ) -> None:
-        self._agent = ChatAgent(provider=provider, api_key=api_key, model=model)
+        resolved_key = api_key or os.environ.get(self._ENV_KEY_MAP.get(provider, ""), None)
+        self._agent = ChatAgent(provider=provider, api_key=resolved_key, model=model)
         self._timeout = timeout_seconds
         self._max_retries = max_retries
 

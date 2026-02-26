@@ -14,7 +14,14 @@ Uso:
 """
 import argparse
 import asyncio
+import logging
 import sys
+
+# Silencia logs de bibliotecas que usam stdout (forge_llm usa structlog → root handler)
+logging.getLogger("forge_llm").setLevel(logging.CRITICAL)
+logging.getLogger("httpx").setLevel(logging.CRITICAL)
+logging.getLogger("httpcore").setLevel(logging.CRITICAL)
+logging.getLogger().handlers = []  # remove root StreamHandler → sem ruído no PTY
 
 from src.application.usecases.terminal_session import TerminalSession
 from src.application.usecases.doctor_runner import DoctorRunner, CheckStatus

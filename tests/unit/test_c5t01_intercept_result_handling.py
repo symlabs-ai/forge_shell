@@ -28,6 +28,12 @@ def _make_session():
     return session
 
 
+def _route_and_flush(session, data: bytes) -> None:
+    """Helper: dispara _route_input e drena o resultado do LLM (sem select loop)."""
+    session._route_input(data)
+    session._flush_pending_llm(timeout=0.5)
+
+
 class TestInterceptResultHandling:
     def test_exec_bash_writes_to_pty(self) -> None:
         session = _make_session()
@@ -37,7 +43,7 @@ class TestInterceptResultHandling:
             bash_command="ls -la",
         )
         session._interceptor = mock_interceptor
-        session._route_input(b"!ls -la\n")
+        _route_and_flush(session, b"!ls -la\n")
         session._engine.write.assert_called_once_with(b"ls -la\n")
 
     def test_noop_does_not_write_to_pty(self) -> None:
@@ -47,7 +53,7 @@ class TestInterceptResultHandling:
             action=InterceptAction.NOOP,
         )
         session._interceptor = mock_interceptor
-        session._route_input(b"some text\n")
+        _route_and_flush(session, b"some text\n")
         session._engine.write.assert_not_called()
 
     def test_toggle_writes_mode_indicator_to_stdout(self) -> None:
@@ -57,8 +63,7 @@ class TestInterceptResultHandling:
             action=InterceptAction.TOGGLE,
         )
         session._interceptor = mock_interceptor
-        session._route_input(b"!\n")
-        # stdout deve receber algo (indicador de modo)
+        _route_and_flush(session, b"!\n")
         assert session._stdout.write.called
 
     def test_toggle_indicator_contains_mode_text(self) -> None:
@@ -68,7 +73,7 @@ class TestInterceptResultHandling:
             action=InterceptAction.TOGGLE,
         )
         session._interceptor = mock_interceptor
-        session._route_input(b"!\n")
+        _route_and_flush(session, b"!\n")
         written = b"".join(
             call.args[0] for call in session._stdout.write.call_args_list
             if call.args
@@ -91,12 +96,11 @@ class TestInterceptResultHandling:
             suggestion=mock_resp,
         )
         session._interceptor = mock_interceptor
-        session._route_input(b"list python files\n")
+        _route_and_flush(session, b"list python files\n")
         written = b"".join(
             call.args[0] for call in session._stdout.write.call_args_list
             if call.args
         )
-        # deve exibir o comando sugerido
         assert b"find" in written or b"*.py" in written
 
     def test_show_suggestion_injects_command_into_pty(self) -> None:
@@ -115,8 +119,7 @@ class TestInterceptResultHandling:
             suggestion=mock_resp,
         )
         session._interceptor = mock_interceptor
-        session._route_input(b"list python files\n")
-        # para risco baixo: injeta o comando no PTY para o usuário revisar e pressionar Enter
+        _route_and_flush(session, b"list python files\n")
         session._engine.write.assert_called()
         written_to_pty = session._engine.write.call_args[0][0]
         assert b"ls *.py" in written_to_pty
