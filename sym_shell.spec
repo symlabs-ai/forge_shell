@@ -1,8 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
-# sym_shell.spec — PyInstaller build spec (T-43)
+# sym_shell.spec — PyInstaller build spec
 #
 # Gera binário standalone Linux: dist/sym_shell
 # Uso: pyinstaller sym_shell.spec
+# Requer: pip install pyinstaller>=6.0 && pip install -e .
 
 block_cipher = None
 
@@ -12,16 +13,24 @@ a = Analysis(
     binaries=[],
     datas=[],
     hiddenimports=[
-        'src.infrastructure.terminal_engine.pty_engine',
-        'src.infrastructure.terminal_engine.alternate_screen',
+        'src.adapters.cli.main',
+        'src.application.usecases.terminal_session',
+        'src.application.usecases.nl_interceptor',
+        'src.application.usecases.nl_mode_engine',
+        'src.application.usecases.doctor_runner',
+        'src.application.usecases.share_session',
+        'src.infrastructure.config.loader',
+        'src.infrastructure.audit.audit_logger',
+        'src.infrastructure.collab.relay_handler',
+        'src.infrastructure.collab.relay_bridge',
+        'src.infrastructure.collab.host_relay_client',
+        'src.infrastructure.collab.viewer_client',
+        'src.infrastructure.collab.session_manager',
+        'src.infrastructure.collab.protocol',
         'src.infrastructure.intelligence.forge_llm_adapter',
         'src.infrastructure.intelligence.risk_engine',
         'src.infrastructure.intelligence.redaction',
-        'src.infrastructure.collab.session_manager',
-        'src.infrastructure.collab.relay_server',
-        'src.infrastructure.collab.protocol',
-        'src.infrastructure.audit.audit_logger',
-        'src.infrastructure.config.loader',
+        'websockets',
         'forge_llm',
         'yaml',
     ],

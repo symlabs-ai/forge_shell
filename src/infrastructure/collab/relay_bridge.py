@@ -31,10 +31,17 @@ class RelayBridge:
     os dados via HostRelayClient.send_output().
     """
 
-    def __init__(self, relay_url: str, session_id: str, token: str) -> None:
+    def __init__(
+        self,
+        relay_url: str,
+        session_id: str,
+        token: str,
+        ssl=None,
+    ) -> None:
         self._relay_url = relay_url
         self._session_id = session_id
         self._token = token
+        self._ssl = ssl
         self._queue: queue.Queue[bytes | None] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -71,6 +78,7 @@ class RelayBridge:
             relay_url=self._relay_url,
             session_id=self._session_id,
             token=self._token,
+            ssl=self._ssl,
         )
         try:
             await client.connect()

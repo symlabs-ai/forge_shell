@@ -57,6 +57,8 @@ class RelayConfig:
     url: str = "ws://localhost:8765"
     port: int = 8765
     tls: bool = False
+    cert_file: str | None = None   # caminho para o certificado TLS (servidor)
+    key_file: str | None = None    # caminho para a chave privada TLS (servidor)
 
 
 @dataclass
@@ -122,9 +124,11 @@ llm:
   max_retries: 2
 
 relay:
-  url: ws://localhost:8765     # URL do relay para 'sym_shell attach'
+  url: ws://localhost:8765     # URL do relay para 'sym_shell attach' (ws:// ou wss://)
   port: 8765                   # porta do relay para 'sym_shell share'
-  tls: false                   # TLS obrigatório (true em produção)
+  tls: false                   # TLS ativo (true → wss://, requer cert_file + key_file)
+  # cert_file: /etc/sym_shell/server.crt   # certificado TLS do servidor (PEM)
+  # key_file:  /etc/sym_shell/server.key   # chave privada TLS do servidor (PEM)
 
 redaction:
   default_profile: prod        # dev (permissivo) | prod (restritivo)
@@ -207,6 +211,8 @@ class ConfigLoader:
             url=relay_raw.get("url", "ws://localhost:8765"),
             port=relay_raw.get("port", 8765),
             tls=relay_raw.get("tls", False),
+            cert_file=relay_raw.get("cert_file", None),
+            key_file=relay_raw.get("key_file", None),
         )
 
         return SymShellConfig(nl_mode=nl_mode, redaction=redaction, llm=llm, relay=relay)

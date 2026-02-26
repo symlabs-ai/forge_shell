@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "sessions": [
+    {
+      "id": "f3899c34-c45a-444c-8cf1-d5526f3eab6c",
+      "feature": "config + token-auth + TLS + build",
+      "status": "completed",
+      "started": "2026-02-26T08:30:00Z",
+      "branch": "main",
+      "files": [
+        "src/adapters/cli/main.py",
+        "src/infrastructure/config/loader.py",
+        "src/infrastructure/collab/relay_handler.py",
+        "src/infrastructure/collab/host_relay_client.py",
+        "src/infrastructure/collab/viewer_client.py",
+        "pyproject.toml",
+        "sym_shell.spec",
+        "scripts/build_standalone.sh",
+        "tests/unit/test_config_subcommand.py",
+        "tests/unit/test_token_auth.py",
+        "tests/unit/test_tls_relay.py",
+        "tests/unit/test_build_artifacts.py"
+      ]
+    }
+  ]
+}

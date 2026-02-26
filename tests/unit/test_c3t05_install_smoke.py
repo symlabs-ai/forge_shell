@@ -58,4 +58,4 @@ class TestInstallSmoke:
         content = (ROOT / "pyproject.toml").read_text()
         match = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', content)
         assert match is not None, "Versão não encontrada no pyproject.toml"
-        assert match.group(1) == "0.3.2"
+        assert match.group(1) == "0.3.3"

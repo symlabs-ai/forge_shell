@@ -15,6 +15,8 @@ Uso:
 import argparse
 import asyncio
 import logging
+import os
+import subprocess
 import sys
 
 # Silencia logs de bibliotecas que usam stdout (forge_llm usa structlog → root handler)
@@ -110,13 +112,110 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="SESSION_ID",
         help="ID da sessão a reconectar (fornecido pelo 'sym_shell share')",
     )
+    attach_parser.add_argument(
+        "--token",
+        metavar="TOKEN",
+        default="",
+        help="Token de autenticação da sessão (fornecido pelo 'sym_shell share')",
+    )
+
+    # config
+    config_parser = subparsers.add_parser(
+        "config",
+        help="Exibir ou editar a configuração do sym_shell",
+        description=(
+            "Sem subcomando: exibe a configuração atual (merged defaults + arquivo). "
+            "Use 'config edit' para abrir o arquivo de configuração no $EDITOR."
+        ),
+    )
+    config_subparsers = config_parser.add_subparsers(dest="config_action", metavar="<action>")
+    config_subparsers.add_parser("show", help="Exibir configuração atual (padrão)")
+    config_subparsers.add_parser("edit", help="Abrir config.yaml no $EDITOR")
 
     return parser
+
+
+def _relay_url_with_tls(url: str, tls: bool) -> str:
+    """Auto-upgrade ws:// → wss:// quando TLS está ativo."""
+    if tls and url.startswith("ws://"):
+        return "wss://" + url[5:]
+    return url
+
+
+def _build_ssl_client_context(tls: bool):
+    """Retorna ssl=True (validação padrão) quando TLS ativo, None caso contrário."""
+    if not tls:
+        return None
+    import ssl
+    return ssl.create_default_context()
+
+
+def _build_ssl_server_context(cert_file: str | None, key_file: str | None):
+    """Cria SSLContext para o servidor relay. Requer cert_file e key_file."""
+    if not cert_file or not key_file:
+        return None
+    import ssl
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(certfile=cert_file, keyfile=key_file)
+    return ctx
+
+
+def _config_show() -> int:
+    """Exibe a configuração atual como YAML."""
+    config = ConfigLoader().load()
+    cfg_path = ConfigLoader()._path
+    print(f"# sym_shell config — {cfg_path}")
+    print(f"# (defaults mesclados com arquivo existente)\n")
+    print(f"nl_mode:")
+    print(f"  default_active: {str(config.nl_mode.default_active).lower()}")
+    print(f"  context_lines: {config.nl_mode.context_lines}")
+    print(f"  var_whitelist: {config.nl_mode.var_whitelist}")
+    print(f"\nllm:")
+    print(f"  provider: {config.llm.provider}")
+    print(f"  model: {config.llm.model}")
+    print(f"  api_key: {'***' if config.llm.api_key else 'null'}")
+    print(f"  timeout_seconds: {config.llm.timeout_seconds}")
+    print(f"  max_retries: {config.llm.max_retries}")
+    print(f"\nrelay:")
+    print(f"  url: {config.relay.url}")
+    print(f"  port: {config.relay.port}")
+    print(f"  tls: {str(config.relay.tls).lower()}")
+    if config.relay.cert_file:
+        print(f"  cert_file: {config.relay.cert_file}")
+    if config.relay.key_file:
+        print(f"  key_file: {config.relay.key_file}")
+    print(f"\nredaction:")
+    print(f"  default_profile: {config.redaction.default_profile}")
+    return 0
+
+
+def _config_edit() -> int:
+    """Abre o config.yaml no $EDITOR."""
+    loader = ConfigLoader()
+    loader.ensure_config_dir()
+    cfg_path = loader._path
+    # Se não existe config.yaml, cria a partir do example
+    if not cfg_path.exists():
+        example = cfg_path.parent / "config.yaml.example"
+        if example.exists():
+            cfg_path.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
+            print(f"[sym_shell] Criado {cfg_path} a partir do exemplo.")
+        else:
+            cfg_path.write_text("# sym_shell config\n", encoding="utf-8")
+    editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "nano"
+    result = subprocess.run([editor, str(cfg_path)])
+    return result.returncode
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "config":
+        action = getattr(args, "config_action", None) or "show"
+        if action == "edit":
+            return _config_edit()
+        return _config_show()
 
     if args.command == "doctor":
         runner = DoctorRunner()
@@ -142,7 +241,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  Relay URL  : {relay_url}")
 
         # Iniciar RelayHandler em thread background
-        relay = RelayHandler(host="0.0.0.0", port=config.relay.port)
+        ssl_server_ctx = _build_ssl_server_context(
+            getattr(config.relay, "cert_file", None),
+            getattr(config.relay, "key_file", None),
+        )
+        relay = RelayHandler(host="0.0.0.0", port=config.relay.port, ssl_context=ssl_server_ctx)
         import threading
         relay_thread = threading.Thread(
             target=lambda: asyncio.run(relay.start()), daemon=True
@@ -150,7 +253,14 @@ def main(argv: list[str] | None = None) -> int:
         relay_thread.start()
 
         # RelayBridge conecta o TerminalSession ao relay
-        bridge = RelayBridge(relay_url=relay_url, session_id=session_id, token=token)
+        relay_url_tls = _relay_url_with_tls(relay_url, config.relay.tls)
+        ssl_client_ctx = _build_ssl_client_context(config.relay.tls)
+        bridge = RelayBridge(
+            relay_url=relay_url_tls,
+            session_id=session_id,
+            token=token,
+            ssl=ssl_client_ctx,
+        )
         bridge.start()
 
         # Iniciar sessão normal com relay_bridge injetado
@@ -176,12 +286,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "attach":
         config = ConfigLoader().load()
+        token = getattr(args, "token", "") or ""
+        relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
         print(f"[sym_shell] Conectando à sessão: {args.session_id}")
         print(f"[sym_shell] Use Ctrl+C para encerrar a visualização")
+        ssl_ctx = _build_ssl_client_context(config.relay.tls)
         viewer = ViewerClient(
-            relay_url=config.relay.url,
+            relay_url=relay_url,
             session_id=args.session_id,
-            token="",  # token fornecido via flag em ciclo futuro
+            token=token,
+            ssl=ssl_ctx,
         )
 
         async def _viewer_loop() -> None:

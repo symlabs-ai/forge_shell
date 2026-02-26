@@ -30,16 +30,26 @@ class HostRelayClient:
         await client.close()
     """
 
-    def __init__(self, relay_url: str, session_id: str, token: str) -> None:
+    def __init__(
+        self,
+        relay_url: str,
+        session_id: str,
+        token: str,
+        ssl=None,
+    ) -> None:
         self._url = relay_url
         self._session_id = session_id
         self._token = token
+        self._ssl = ssl
         self._ws = None
 
     async def connect(self) -> None:
         if websockets is None:
             raise RuntimeError("websockets não instalado")
-        self._ws = await websockets.connect(self._url)
+        kwargs = {}
+        if self._ssl is not None:
+            kwargs["ssl"] = self._ssl
+        self._ws = await websockets.connect(self._url, **kwargs)
         # registrar como host
         await self._ws.send(json.dumps({
             "type": "session_join",

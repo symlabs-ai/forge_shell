@@ -1,6 +1,6 @@
 # SPEC.md — sym_shell
 
-> Versão: 0.3.2
+> Versão: 0.3.3
 > MVP entregue em: 2026-02-25
 > Última atualização: 2026-02-26
 > Status: mvp
@@ -58,12 +58,14 @@ Terminal Bash nativo com linguagem natural integrada, colaboração remota e aud
 | Relay protocol — RelayMessage framing JSON (encode/decode) | US-04 | Entregue | cycle-01 |
 | `pip install -e .` via pyproject.toml + entry point `sym_shell` | — | Entregue | cycle-02 |
 | SuggestCard — estrutura de card suggest-only (infra) | US-05 | Entregue | cycle-01 |
+| `sym_shell config [show\|edit]` — exibe/edita config YAML sem abrir arquivo | — | Entregue | /feature |
+| `sym_shell attach --token` — token auth no viewer (RelayHandler valida) | US-04 | Entregue | /feature |
+| TLS no relay — ssl_context em RelayHandler + auto wss:// + cert_file/key_file | US-04 | Entregue | /feature |
+| Build distribuível — sym_shell.spec PyInstaller + scripts/build.sh + pipx | — | Entregue | /feature |
 
 ### O que está fora do escopo
 
 - Co-control remoto (injeção de input pelo viewer) — pós-MVP
-- TLS efetivo na conexão relay (flag `tls: true` existe; aplicação real do TLS fica pós-MVP v1.1)
-- Autenticação de token no attach (token é enviado vazio; validação real fica pós-MVP)
 - Chat bidirecional interativo wired no CLI (protocolo definido; integração com NL Mode fica pós-MVP)
 - UI browser para viewer remoto (cliente é terminal)
 - Windows ConPTY (fase 1.2)
@@ -221,3 +223,4 @@ Ao finalizar uma feature (`/feature done`), SPEC.md é atualizado automaticament
 | 0.3.0 | 2026-02-25 | share CLI com RelayHandler inline + double-confirm HIGH risk + toggle indicator + config.yaml.example | cycle-06 |
 | 0.3.1 | 2026-02-26 | Diagramas (class, components, database, architecture) + SPEC.md | — |
 | 0.3.2 | 2026-02-26 | :help + :risk + Ctrl-C LLM cancel + múltiplos comandos + context injection (cwd+last_lines) + :explain streaming + SummarizeCompactor + symrouter | /feature |
+| 0.3.3 | 2026-02-26 | sym_shell config show/edit + attach --token + TLS relay (ssl_context + wss:// auto) + build distribuível (PyInstaller spec + pipx) | /feature |

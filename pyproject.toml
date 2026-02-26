@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sym-shell"
-version = "0.3.2"
+version = "0.3.3"
 description = "Terminal Bash nativo com NL Mode, colaboração remota e auditoria"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -23,6 +23,7 @@ include = ["src*"]
 
 [project.optional-dependencies]
 dev = ["pexpect>=4.9"]
+standalone = ["pyinstaller>=6.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
