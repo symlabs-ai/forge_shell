@@ -107,9 +107,17 @@ nl_mode:
   var_whitelist: []            # variáveis de ambiente enviadas ao LLM (ex: ["HOME", "USER"])
 
 llm:
-  provider: ollama             # ollama | openai | anthropic | openrouter
-  model: llama3.2              # modelo (ex: llama3.2, gpt-4o, claude-3-5-haiku-20241022)
-  api_key: null                # chave de API (null para Ollama local)
+  provider: ollama             # ollama | openai | anthropic | openrouter | xai | symrouter
+  model: llama3.2              # exemplos por provider:
+                               #   ollama:     llama3.2, llama3.1, mistral
+                               #   xai:        grok-4.1-fast, grok-4-fast, grok-4
+                               #   openai:     gpt-4o, gpt-4o-mini, gpt-4.1
+                               #   anthropic:  claude-sonnet-4-6, claude-haiku-4-5-20251001
+                               #   symrouter:  qualquer modelo — roteado pelo gateway
+  api_key: null                # chave de API (null para Ollama local ou variável de ambiente)
+                               #   xai:       XAI_API_KEY
+                               #   openai:    OPENAI_API_KEY
+                               #   symrouter: SYMROUTER_API_KEY
   timeout_seconds: 30
   max_retries: 2
 

@@ -19,7 +19,7 @@ import logging
 import os
 from collections.abc import Callable
 
-from forge_llm import ChatAgent, ChatConfig, ChatMessage
+from forge_llm import ChatAgent, ChatConfig, ChatMessage, SummarizeCompactor
 
 from src.infrastructure.intelligence.nl_response import NLResponse, RiskLevel
 
@@ -72,6 +72,7 @@ class ForgeLLMAdapter:
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
         "openrouter": "OPENROUTER_API_KEY",
+        "symrouter": "SYMROUTER_API_KEY",
     }
 
     def __init__(
@@ -106,10 +107,29 @@ class ForgeLLMAdapter:
             )
         return self._agent
 
-    def _trim_history(self) -> None:
-        """Manter apenas os últimos max_history exchanges (user+assistant pairs)."""
+    def _compact_history(self) -> None:
+        """
+        Compactar histórico quando excede max_history exchanges.
+
+        Usa SummarizeCompactor: o LLM resume as mensagens mais antigas em um
+        bloco de contexto compacto, preservando semântica (não apenas trunca).
+        Se a sumarização falhar, cai back para truncação simples.
+        """
         max_msgs = self._max_history * 2
-        if len(self._history) > max_msgs:
+        if len(self._history) <= max_msgs:
+            return
+        try:
+            compactor = SummarizeCompactor(
+                agent=self._get_agent(),
+                summary_tokens=150,
+                keep_recent=4,
+            )
+            # ~250 tokens por mensagem como estimativa para o target
+            self._history = compactor.compact(
+                self._history, target_tokens=max_msgs * 250
+            )
+        except Exception as exc:
+            log.warning("SummarizeCompactor falhou, truncando: %s", exc)
             self._history = self._history[-max_msgs:]
 
     def request(
@@ -153,7 +173,7 @@ class ForgeLLMAdapter:
                     self._history.append(
                         ChatMessage(role="assistant", content=raw_content)
                     )
-                    self._trim_history()
+                    self._compact_history()
                 return result
             except Exception as exc:
                 log.warning("ForgeLLM stream error: %s", exc)
@@ -171,7 +191,7 @@ class ForgeLLMAdapter:
                     self._history.append(
                         ChatMessage(role="assistant", content=response.content)
                     )
-                    self._trim_history()
+                    self._compact_history()
                 return result
             except TimeoutError:
                 log.warning(
