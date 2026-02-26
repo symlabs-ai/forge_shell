@@ -10,6 +10,7 @@ Retorna um InterceptResult que descreve a ação a tomar:
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -48,7 +49,11 @@ class NLInterceptor:
         """Atualizar contexto LLM (cwd, last_lines, last_cmd)."""
         self._context = context
 
-    def intercept(self, data: bytes) -> InterceptResult:
+    def intercept(
+        self,
+        data: bytes,
+        on_chunk: Callable[[str], None] | None = None,
+    ) -> InterceptResult:
         """
         Processar chunk de input.
 
@@ -64,7 +69,9 @@ class NLInterceptor:
         if not stripped:
             return InterceptResult(action=InterceptAction.NOOP)
 
-        result = self._engine.process_input(text=stripped, context=self._context)
+        result = self._engine.process_input(
+            text=stripped, context=self._context, on_chunk=on_chunk
+        )
 
         if result is None:
             # toggle — NLModeEngine retorna None quando há mudança de estado

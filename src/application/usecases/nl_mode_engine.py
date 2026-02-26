@@ -12,6 +12,7 @@ Fluxo:
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -59,7 +60,12 @@ class NLModeEngine:
         else:
             self._state = NLModeState.NL_ACTIVE
 
-    def process_input(self, text: str, context: dict) -> NLResult | None:
+    def process_input(
+        self,
+        text: str,
+        context: dict,
+        on_chunk: Callable[[str], None] | None = None,
+    ) -> NLResult | None:
         """
         Processar input do usuário.
 
@@ -87,7 +93,7 @@ class NLModeEngine:
             return NLResult(bash_command=stripped)
 
         # --- NL Mode: envia ao ForgeLLM ---
-        response = self._adapter.request(text=text, context=context)
+        response = self._adapter.request(text=text, context=context, on_chunk=on_chunk)
 
         if response is None:
             return NLResult()

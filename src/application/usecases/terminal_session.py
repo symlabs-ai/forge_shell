@@ -171,17 +171,27 @@ class TerminalSession:
                     self._llm_pending = True
                     _tlog.debug("  dispatching LLM thread for NL query")
                     if out:
-                        out.write(b'\033[36m[sym_shell: pensando...]\033[0m\r\n')
+                        out.write(b'\033[36m[sym_shell: pensando')
                         out.flush()
                     interceptor = self._interceptor
                     llm_q = self._llm_queue
+                    _out = out  # captura para closure da thread
+
+                    def _on_chunk(chunk_text: str) -> None:
+                        if _out:
+                            _out.write(b'.')
+                            _out.flush()
+
                     def _llm_thread(text: bytes) -> None:
                         t_start = time.monotonic()
                         try:
-                            res = interceptor.intercept(text)
+                            res = interceptor.intercept(text, on_chunk=_on_chunk)
                         except Exception as e:
                             _tlog.debug("  LLM thread exception: %s", e)
                             res = None
+                        if _out:
+                            _out.write(b']\033[0m\r\n')
+                            _out.flush()
                         _tlog.debug("  LLM thread done in %.3fs", time.monotonic() - t_start)
                         llm_q.put(res)
                     threading.Thread(target=_llm_thread, args=(full,), daemon=True).start()

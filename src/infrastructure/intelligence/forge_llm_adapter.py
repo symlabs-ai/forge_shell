@@ -4,14 +4,22 @@ ForgeLLMAdapter — adapter para o ForgeLLM (forge-llm library).
 Converte requisições NL em NLResponse validada.
 Em caso de falha (timeout, schema inválido, exceção), retorna None
 sem propagar exceção — o terminal nunca trava por causa do LLM.
+
+Funcionalidades do ForgeLLM aproveitadas:
+- ChatConfig(temperature=0.2): respostas determinísticas para shell commands
+- Histórico multi-turn: últimas N exchanges incluídas em cada requisição,
+  permitindo follow-ups naturais ("mostre só os 3 maiores")
+- stream_chat(): tokens chegam em chunks via on_chunk(), habilitando
+  indicador animado de "pensando" no terminal
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
+from collections.abc import Callable
 
-from forge_llm import ChatAgent, ChatMessage
+from forge_llm import ChatAgent, ChatConfig, ChatMessage
 
 from src.infrastructure.intelligence.nl_response import NLResponse, RiskLevel
 
@@ -48,14 +56,15 @@ NÃO execute o comando. Apenas analise e explique.
 
 class ForgeLLMAdapter:
     """
-    Adapter para ForgeLLM.
+    Adapter para ForgeLLM com histórico multi-turn e streaming.
 
     Parâmetros:
         api_key: chave de API do provider (ou None para usar variável de ambiente)
-        provider: nome do provider (ollama, openai, anthropic, openrouter)
+        provider: nome do provider (ollama, openai, anthropic, openrouter, xai)
         model: modelo a usar
         timeout_seconds: timeout da requisição
-        max_retries: tentativas em caso de falha transiente
+        max_retries: tentativas em caso de falha transiente (caminho não-streaming)
+        max_history: número máximo de exchanges (pares user/assistant) mantidos
     """
 
     _ENV_KEY_MAP = {
@@ -72,6 +81,7 @@ class ForgeLLMAdapter:
         model: str = "llama3",
         timeout_seconds: int = 30,
         max_retries: int = 2,
+        max_history: int = 5,
     ) -> None:
         self._provider = provider
         self._model = model
@@ -79,8 +89,13 @@ class ForgeLLMAdapter:
         self._timeout = timeout_seconds
         self._max_retries = max_retries
         self._agent = None  # lazy: criado na primeira chamada a request()/explain()
+        # histórico multi-turn: lista alternada [user, assistant, user, assistant, ...]
+        self._history: list[ChatMessage] = []
+        self._max_history = max_history
+        # temperatura baixa = respostas mais determinísticas para shell commands
+        self._config = ChatConfig(temperature=0.2)
 
-    def _get_agent(self) -> "ChatAgent":
+    def _get_agent(self) -> ChatAgent:
         """Retorna o ChatAgent, criando-o lazily na primeira chamada."""
         if self._agent is None:
             resolved_key = self._api_key or os.environ.get(
@@ -91,25 +106,77 @@ class ForgeLLMAdapter:
             )
         return self._agent
 
-    def request(self, text: str, context: dict) -> NLResponse | None:
+    def _trim_history(self) -> None:
+        """Manter apenas os últimos max_history exchanges (user+assistant pairs)."""
+        max_msgs = self._max_history * 2
+        if len(self._history) > max_msgs:
+            self._history = self._history[-max_msgs:]
+
+    def request(
+        self,
+        text: str,
+        context: dict,
+        on_chunk: Callable[[str], None] | None = None,
+    ) -> NLResponse | None:
         """
         Enviar requisição NL ao ForgeLLM.
 
         Retorna NLResponse validada ou None em caso de falha.
         Nunca lança exceção para não travar o terminal.
+
+        Parâmetros:
+            on_chunk: callback chamado com cada chunk de texto durante streaming.
+                      Se fornecido, usa stream_chat() em vez de chat().
+                      Se None, usa chat() com retry normal.
         """
         prompt = self._build_prompt(text, context)
+        user_msg = ChatMessage(role="user", content=prompt)
         messages = [
             ChatMessage(role="system", content=_SYSTEM_PROMPT),
-            ChatMessage(role="user", content=prompt),
+            *self._history,
+            user_msg,
         ]
 
+        if on_chunk is not None:
+            # caminho streaming: sem retry (evita duplicar output no terminal)
+            try:
+                raw_content = ""
+                for chunk in self._get_agent().stream_chat(
+                    messages=messages, config=self._config
+                ):
+                    if chunk.content:
+                        raw_content += chunk.content
+                        on_chunk(chunk.content)
+                result = self._parse(raw_content)
+                if result is not None:
+                    self._history.append(user_msg)
+                    self._history.append(
+                        ChatMessage(role="assistant", content=raw_content)
+                    )
+                    self._trim_history()
+                return result
+            except Exception as exc:
+                log.warning("ForgeLLM stream error: %s", exc)
+                return None
+
+        # caminho não-streaming: mantém retry para tolerância a falhas transientes
         for attempt in range(self._max_retries + 1):
             try:
-                response = self._get_agent().chat(messages=messages)
-                return self._parse(response.content)
+                response = self._get_agent().chat(
+                    messages=messages, config=self._config
+                )
+                result = self._parse(response.content)
+                if result is not None:
+                    self._history.append(user_msg)
+                    self._history.append(
+                        ChatMessage(role="assistant", content=response.content)
+                    )
+                    self._trim_history()
+                return result
             except TimeoutError:
-                log.warning("ForgeLLM timeout (attempt %d/%d)", attempt + 1, self._max_retries + 1)
+                log.warning(
+                    "ForgeLLM timeout (attempt %d/%d)", attempt + 1, self._max_retries + 1
+                )
             except Exception as exc:
                 log.warning("ForgeLLM error: %s", exc)
                 break
@@ -120,6 +187,7 @@ class ForgeLLMAdapter:
         """
         Analisar e explicar um comando sem executá-lo (:explain <cmd>).
 
+        Usa system prompt separado; sem histórico (análise pontual).
         Retorna NLResponse ou None em caso de falha.
         """
         prompt = f"Comando a analisar: {command}"
@@ -131,10 +199,15 @@ class ForgeLLMAdapter:
         ]
         for attempt in range(self._max_retries + 1):
             try:
-                response = self._get_agent().chat(messages=messages)
+                response = self._get_agent().chat(
+                    messages=messages, config=self._config
+                )
                 return self._parse(response.content)
             except TimeoutError:
-                log.warning("ForgeLLM explain timeout (attempt %d/%d)", attempt + 1, self._max_retries + 1)
+                log.warning(
+                    "ForgeLLM explain timeout (attempt %d/%d)",
+                    attempt + 1, self._max_retries + 1,
+                )
             except Exception as exc:
                 log.warning("ForgeLLM explain error: %s", exc)
                 break
