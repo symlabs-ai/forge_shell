@@ -163,9 +163,10 @@ class TerminalSession:
                 is_escape    = stripped.startswith("!") and len(stripped) > 1
                 is_bash_mode = self._mode == SessionMode.BASH
                 is_explain   = stripped.lower().startswith(":explain ") and len(stripped) > 9
-                _tlog.debug("  path: toggle=%s escape=%s bash_mode=%s explain=%s | stripped=%r",
-                            is_toggle, is_escape, is_bash_mode, is_explain, stripped)
-                if is_toggle or is_escape or (is_bash_mode and not is_explain):
+                is_help      = stripped.lower() == ":help"
+                _tlog.debug("  path: toggle=%s escape=%s bash_mode=%s explain=%s help=%s | stripped=%r",
+                            is_toggle, is_escape, is_bash_mode, is_explain, is_help, stripped)
+                if is_toggle or is_escape or is_help or (is_bash_mode and not is_explain):
                     t1 = time.monotonic()
                     result = self._interceptor.intercept(full)
                     t2 = time.monotonic()
@@ -248,6 +249,25 @@ class TerminalSession:
             # fica aguardando o prompt que nunca aparece automaticamente)
             self._pty_running = True
             self._engine.write(b"\r")
+            return
+
+        if result.action == InterceptAction.HELP:
+            lines = [
+                b"\r\n",
+                b"\033[1;36msym_shell\033[0m \xe2\x80\x94 comandos dispon\xc3\xadveis\r\n",
+                b"\r\n",
+                b"  \033[33m!\033[0m              alternar NL Mode \xe2\x86\x94 Bash Mode\r\n",
+                b"  \033[33m!<cmd>\033[0m         executar bash direto (ex: \033[2m!ls -la\033[0m)\r\n",
+                b"  \033[33m:explain <cmd>\033[0m analisar comando sem executar\r\n",
+                b"  \033[33m:help\033[0m          exibir esta ajuda\r\n",
+                b"\r\n",
+                b"  \033[2mNL Mode:\033[0m descreva em portugu\xc3\xaas \xe2\x86\x92 sym_shell gera o comando\r\n",
+                b"\r\n",
+            ]
+            if out:
+                for line in lines:
+                    out.write(line)
+                out.flush()
             return
 
         if result.action == InterceptAction.EXPLAIN:
@@ -359,6 +379,7 @@ class TerminalSession:
             b"  |  \033[33m!\033[0m para bash"
             b"  |  \033[33m!<cmd>\033[0m bash direto"
             b"  |  \033[33m:explain <cmd>\033[0m analisar"
+            b"  |  \033[33m:help\033[0m ajuda"
             b"\r\n"
         )
         out.write(hint)

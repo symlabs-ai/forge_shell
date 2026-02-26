@@ -23,6 +23,7 @@ class InterceptAction(str, Enum):
     EXEC_BASH = "exec_bash"
     SHOW_SUGGESTION = "show_suggestion"
     EXPLAIN = "explain"
+    HELP = "help"
     NOOP = "noop"
 
 
@@ -77,6 +78,9 @@ class NLInterceptor:
         if result is None:
             # toggle — NLModeEngine retorna None quando há mudança de estado
             return InterceptResult(action=InterceptAction.TOGGLE)
+
+        if result.is_help:
+            return InterceptResult(action=InterceptAction.HELP)
 
         if result.is_explanation:
             return InterceptResult(

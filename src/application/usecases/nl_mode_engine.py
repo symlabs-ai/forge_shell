@@ -34,6 +34,7 @@ class NLResult:
     requires_double_confirm: bool = False
     state_changed: bool = False
     is_explanation: bool = False
+    is_help: bool = False
 
 
 class NLModeEngine:
@@ -88,6 +89,10 @@ class NLModeEngine:
             bash_cmd = stripped[1:].lstrip()
             self._state = NLModeState.NL_ACTIVE  # garante retorno ao NL Mode
             return NLResult(bash_command=bash_cmd)
+
+        # --- :help → exibir ajuda local (sem LLM, funciona em ambos os modos) ---
+        if stripped.lower() == ":help":
+            return NLResult(is_help=True)
 
         # --- :explain <cmd> → análise pontual do LLM (funciona em ambos os modos) ---
         if stripped.lower().startswith(":explain ") and len(stripped) > 9:
