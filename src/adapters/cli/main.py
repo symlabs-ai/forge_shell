@@ -113,6 +113,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Senha de sessão (6 dígitos, exibida pelo 'sym_shell share')",
     )
 
+    # relay
+    relay_parser = subparsers.add_parser(
+        "relay",
+        help="Iniciar servidor relay standalone (deploy em servidor público)",
+        description=(
+            "Inicia o RelayHandler como serviço standalone. "
+            "Faça deploy em um servidor com IP público para que 'sym_shell share' "
+            "e 'sym_shell attach' conectem sem precisar de NAT ou porta aberta no host. "
+            "Configure relay.url no config.yaml para apontar para este servidor."
+        ),
+    )
+    relay_parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Interface de bind (padrão: 0.0.0.0 — todas as interfaces)",
+    )
+    relay_parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="Porta de escuta (padrão: relay.port do config, normalmente 8060)",
+    )
+
     # config
     config_parser = subparsers.add_parser(
         "config",
@@ -217,6 +240,23 @@ def main(argv: list[str] | None = None) -> int:
         print(report.to_text())
         return 0 if report.overall.value != CheckStatus.FAIL.value else 1
 
+    if args.command == "relay":
+        config = ConfigLoader().load()
+        port = args.port if args.port is not None else config.relay.port
+        bind_host = args.host
+        ssl_ctx = _build_ssl_server_context(
+            getattr(config.relay, "cert_file", None),
+            getattr(config.relay, "key_file", None),
+        )
+        relay = RelayHandler(host=bind_host, port=port, ssl_context=ssl_ctx)
+        print(f"[sym_shell relay] Escutando em ws://{bind_host}:{port}")
+        print(f"[sym_shell relay] Ctrl+C para encerrar")
+        try:
+            asyncio.run(relay.start())
+        except KeyboardInterrupt:
+            pass
+        return 0
+
     if args.command == "share":
         config = ConfigLoader().load()
         from src.infrastructure.collab import machine_id as _machine_id
@@ -230,30 +270,18 @@ def main(argv: list[str] | None = None) -> int:
         uc = ShareSession(session_manager=sm)
         result = uc.run(host_id="local", machine_code=machine_code, password=password)
 
-        relay_url = config.relay.url
+        relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
 
         print(f"[sym_shell] Sessão compartilhada iniciada")
         print(f"  Código da máquina : {result['machine_code']}")
         print(f"  Senha de sessão   : {result['password']}")
         print(f"  Relay URL         : {relay_url}")
 
-        # Iniciar RelayHandler em thread background
-        ssl_server_ctx = _build_ssl_server_context(
-            getattr(config.relay, "cert_file", None),
-            getattr(config.relay, "key_file", None),
-        )
-        relay = RelayHandler(host="0.0.0.0", port=config.relay.port, ssl_context=ssl_server_ctx)
-        import threading
-        relay_thread = threading.Thread(
-            target=lambda: asyncio.run(relay.start()), daemon=True
-        )
-        relay_thread.start()
-
-        # RelayBridge conecta o TerminalSession ao relay
-        relay_url_tls = _relay_url_with_tls(relay_url, config.relay.tls)
+        # RelayBridge conecta o TerminalSession ao relay externo
+        # Use 'sym_shell relay' para subir o servidor relay separadamente
         ssl_client_ctx = _build_ssl_client_context(config.relay.tls)
         bridge = RelayBridge(
-            relay_url=relay_url_tls,
+            relay_url=relay_url,
             session_id=result["machine_code"],
             token=result["password"],
             ssl=ssl_client_ctx,
@@ -278,7 +306,6 @@ def main(argv: list[str] | None = None) -> int:
         session._write_startup_hint()
         rc = session.run()
         bridge.stop()
-        relay.stop()
         return rc
 
     if args.command == "attach":

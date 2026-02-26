@@ -18,10 +18,9 @@ class TestShareRelayWired:
         assert hasattr(m, "RelayHandler") or True  # verifica import sem erro
 
     def test_share_starts_relay_bridge(self) -> None:
-        """share deve criar e iniciar um RelayBridge."""
+        """share deve criar e iniciar um RelayBridge (conecta ao relay externo)."""
         with patch("src.adapters.cli.main.SessionManager"), \
              patch("src.adapters.cli.main.ShareSession") as MockSS, \
-             patch("src.adapters.cli.main.RelayHandler") as MockRH, \
              patch("src.adapters.cli.main.RelayBridge") as MockRB, \
              patch("src.adapters.cli.main.TerminalSession") as MockTS, \
              patch("src.adapters.cli.main.NLInterceptor"), \
@@ -44,7 +43,6 @@ class TestShareRelayWired:
         """share deve injetar _relay_bridge no TerminalSession."""
         with patch("src.adapters.cli.main.SessionManager"), \
              patch("src.adapters.cli.main.ShareSession") as MockSS, \
-             patch("src.adapters.cli.main.RelayHandler"), \
              patch("src.adapters.cli.main.RelayBridge") as MockRB, \
              patch("src.adapters.cli.main.TerminalSession") as MockTS, \
              patch("src.adapters.cli.main.NLInterceptor"), \
@@ -66,7 +64,6 @@ class TestShareRelayWired:
         """share deve exibir machine_code e password."""
         with patch("src.adapters.cli.main.SessionManager"), \
              patch("src.adapters.cli.main.ShareSession") as MockSS, \
-             patch("src.adapters.cli.main.RelayHandler"), \
              patch("src.adapters.cli.main.RelayBridge"), \
              patch("src.adapters.cli.main.TerminalSession") as MockTS, \
              patch("src.adapters.cli.main.NLInterceptor"), \

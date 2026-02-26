@@ -47,7 +47,6 @@ class TestTerminalSessionRelayBridge:
 
 def _share_infra_patches():
     return dict(
-        RelayHandler=MagicMock(),
         RelayBridge=MagicMock(),
         TerminalSession=MagicMock(**{"return_value.run.return_value": 0}),
         NLInterceptor=MagicMock(),
