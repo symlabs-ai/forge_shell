@@ -35,6 +35,8 @@ class NLResult:
     state_changed: bool = False
     is_explanation: bool = False
     is_help: bool = False
+    is_risk: bool = False
+    risk_level: RiskLevel | None = None
 
 
 class NLModeEngine:
@@ -93,6 +95,12 @@ class NLModeEngine:
         # --- :help → exibir ajuda local (sem LLM, funciona em ambos os modos) ---
         if stripped.lower() == ":help":
             return NLResult(is_help=True)
+
+        # --- :risk <cmd> → classificar risco local (sem LLM, funciona em ambos os modos) ---
+        if stripped.lower().startswith(":risk ") and len(stripped) > 6:
+            cmd = stripped[6:].strip()
+            level = self._risk.classify(cmd)
+            return NLResult(is_risk=True, risk_level=level)
 
         # --- :explain <cmd> → análise pontual do LLM (funciona em ambos os modos) ---
         if stripped.lower().startswith(":explain ") and len(stripped) > 9:

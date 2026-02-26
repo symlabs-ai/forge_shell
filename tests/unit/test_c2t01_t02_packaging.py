@@ -18,9 +18,9 @@ class TestPyprojectToml:
         content = (ROOT / "pyproject.toml").read_text()
         assert 'version' in content
 
-    def test_version_is_0_3_0(self) -> None:
+    def test_version_is_0_3_1(self) -> None:
         content = (ROOT / "pyproject.toml").read_text()
-        assert '0.3.0' in content
+        assert '0.3.1' in content
 
     def test_has_entry_point(self) -> None:
         content = (ROOT / "pyproject.toml").read_text()

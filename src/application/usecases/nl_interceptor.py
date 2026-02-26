@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from src.application.usecases.nl_mode_engine import NLModeEngine
-from src.infrastructure.intelligence.nl_response import NLResponse
+from src.infrastructure.intelligence.nl_response import NLResponse, RiskLevel
 
 
 class InterceptAction(str, Enum):
@@ -24,6 +24,7 @@ class InterceptAction(str, Enum):
     SHOW_SUGGESTION = "show_suggestion"
     EXPLAIN = "explain"
     HELP = "help"
+    RISK = "risk"
     NOOP = "noop"
 
 
@@ -33,6 +34,7 @@ class InterceptResult:
     bash_command: str | None = None
     suggestion: NLResponse | None = None
     requires_double_confirm: bool = False
+    risk_level: RiskLevel | None = None
 
 
 class NLInterceptor:
@@ -81,6 +83,9 @@ class NLInterceptor:
 
         if result.is_help:
             return InterceptResult(action=InterceptAction.HELP)
+
+        if result.is_risk:
+            return InterceptResult(action=InterceptAction.RISK, risk_level=result.risk_level)
 
         if result.is_explanation:
             return InterceptResult(

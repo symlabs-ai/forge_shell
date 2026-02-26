@@ -76,6 +76,7 @@ class TerminalSession:
         self._nl_buffer: bytes = b""  # buffer de linha no NL Mode
         self._llm_queue: queue.Queue = queue.Queue()  # resultados assíncronos do LLM
         self._llm_pending: bool = False  # evita chamadas simultâneas
+        self._llm_cancel: threading.Event = threading.Event()  # sinaliza cancelamento ao LLM thread
         self._pty_running: bool = False  # True enquanto comando está em execução no PTY
         self._in_password_entry: bool = False  # True após prompt de senha detectado
         # contexto LLM: últimas N linhas de output e cwd
@@ -136,10 +137,22 @@ class TerminalSession:
                     out.flush()
             return
 
-        # Ctrl-C — limpa buffer e envia ao PTY (interrompe bash)
+        # Ctrl-C — cancela LLM pendente ou interrompe bash
         if data == b'\x03':
-            self._nl_buffer = b""
-            self._engine.write(data)
+            if self._llm_pending:
+                # sinaliza cancelamento para a thread LLM e restaura estado
+                self._llm_cancel.set()
+                self._llm_pending = False
+                try:
+                    self._llm_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                if out:
+                    out.write(b']\033[0m\r\n\033[33m[sym_shell: cancelado]\033[0m\r\n')
+                    out.flush()
+            else:
+                self._nl_buffer = b""
+                self._engine.write(data)
             return
 
         # Enter (\r ou \n) — acumula prefixo antes do newline, dispara LLM em thread
@@ -164,9 +177,10 @@ class TerminalSession:
                 is_bash_mode = self._mode == SessionMode.BASH
                 is_explain   = stripped.lower().startswith(":explain ") and len(stripped) > 9
                 is_help      = stripped.lower() == ":help"
-                _tlog.debug("  path: toggle=%s escape=%s bash_mode=%s explain=%s help=%s | stripped=%r",
-                            is_toggle, is_escape, is_bash_mode, is_explain, is_help, stripped)
-                if is_toggle or is_escape or is_help or (is_bash_mode and not is_explain):
+                is_risk      = stripped.lower().startswith(":risk ") and len(stripped) > 6
+                _tlog.debug("  path: toggle=%s escape=%s bash_mode=%s explain=%s help=%s risk=%s | stripped=%r",
+                            is_toggle, is_escape, is_bash_mode, is_explain, is_help, is_risk, stripped)
+                if is_toggle or is_escape or is_help or is_risk or (is_bash_mode and not is_explain):
                     t1 = time.monotonic()
                     result = self._interceptor.intercept(full)
                     t2 = time.monotonic()
@@ -176,6 +190,7 @@ class TerminalSession:
                     _tlog.debug("  handle_intercept_result() done, total=%.3fs", time.monotonic() - t0)
                 else:
                     self._llm_pending = True
+                    self._llm_cancel.clear()  # reset antes de cada dispatch
                     _tlog.debug("  dispatching LLM thread for NL query")
                     if self._interceptor is not None:
                         self._interceptor.set_context(self._build_context())
@@ -185,8 +200,11 @@ class TerminalSession:
                     interceptor = self._interceptor
                     llm_q = self._llm_queue
                     _out = out  # captura para closure da thread
+                    _cancel = self._llm_cancel  # captura event de cancelamento
 
                     def _on_chunk(chunk_text: str) -> None:
+                        if _cancel.is_set():
+                            raise KeyboardInterrupt  # interrompe stream_chat()
                         if _out:
                             _out.write(b'.')
                             _out.flush()
@@ -198,6 +216,9 @@ class TerminalSession:
                         except Exception as e:
                             _tlog.debug("  LLM thread exception: %s", e)
                             res = None
+                        if _cancel.is_set():
+                            # Ctrl-C já escreveu o fechamento e resetou o estado
+                            return
                         if _out:
                             _out.write(b']\033[0m\r\n')
                             _out.flush()
@@ -259,14 +280,30 @@ class TerminalSession:
                 b"  \033[33m!\033[0m              alternar NL Mode \xe2\x86\x94 Bash Mode\r\n",
                 b"  \033[33m!<cmd>\033[0m         executar bash direto (ex: \033[2m!ls -la\033[0m)\r\n",
                 b"  \033[33m:explain <cmd>\033[0m analisar comando sem executar\r\n",
+                b"  \033[33m:risk <cmd>\033[0m    classificar risco de um comando\r\n",
                 b"  \033[33m:help\033[0m          exibir esta ajuda\r\n",
                 b"\r\n",
                 b"  \033[2mNL Mode:\033[0m descreva em portugu\xc3\xaas \xe2\x86\x92 sym_shell gera o comando\r\n",
+                b"  \033[2mCtrl-C:\033[0m cancela consulta LLM em andamento\r\n",
                 b"\r\n",
             ]
             if out:
                 for line in lines:
                     out.write(line)
+                out.flush()
+            return
+
+        if result.action == InterceptAction.RISK:
+            level = result.risk_level
+            level_str = level.value if level is not None else "unknown"
+            if level_str == "low":
+                color = b"\033[1;32m"   # verde
+            elif level_str == "medium":
+                color = b"\033[1;33m"   # amarelo
+            else:
+                color = b"\033[1;31m"   # vermelho
+            if out:
+                out.write(b"\r\n  Risco: " + color + level_str.upper().encode() + b"\033[0m\r\n\r\n")
                 out.flush()
             return
 
@@ -280,7 +317,8 @@ class TerminalSession:
             risk_str = risk.value if hasattr(risk, "value") else str(risk)
             lines = [b"\r\n"]
             if commands:
-                lines.append(b"\033[1;34m[?] " + commands[0].encode() + b"\033[0m\r\n")
+                cmd_str = " && ".join(commands)
+                lines.append(b"\033[1;34m[?] " + cmd_str.encode() + b"\033[0m\r\n")
             if explanation:
                 lines.append(b"   " + explanation.encode() + b"\r\n")
             lines.append(b"   Risco: " + risk_str.encode() + b"\r\n\r\n")
@@ -301,11 +339,11 @@ class TerminalSession:
 
             requires_confirm = getattr(result, "requires_double_confirm", False)
 
-            # formatar sugestão para o terminal
+            # formatar sugestão para o terminal (todos os comandos, join com &&)
+            cmd_str = " && ".join(commands) if commands else ""
             lines = [b"\r\n"]
-            if commands:
-                cmd_display = commands[0].encode()
-                lines.append(b"\033[1;32m[*] " + cmd_display + b"\033[0m\r\n")
+            if cmd_str:
+                lines.append(b"\033[1;32m[*] " + cmd_str.encode() + b"\033[0m\r\n")
             if explanation:
                 lines.append(b"   " + explanation.encode() + b"\r\n")
             lines.append(b"   Risco: " + risk_str.encode() + b"\r\n")
@@ -323,9 +361,9 @@ class TerminalSession:
                     out.write(line)
                 out.flush()
 
-            if not requires_confirm and commands:
+            if not requires_confirm and cmd_str:
                 # risco baixo/médio: injeta no PTY para o usuário revisar e pressionar Enter
-                self._engine.write(commands[0].encode())
+                self._engine.write(cmd_str.encode())
             return
 
     # ------------------------------------------------------------------
@@ -379,6 +417,7 @@ class TerminalSession:
             b"  |  \033[33m!\033[0m para bash"
             b"  |  \033[33m!<cmd>\033[0m bash direto"
             b"  |  \033[33m:explain <cmd>\033[0m analisar"
+            b"  |  \033[33m:risk <cmd>\033[0m risco"
             b"  |  \033[33m:help\033[0m ajuda"
             b"\r\n"
         )
