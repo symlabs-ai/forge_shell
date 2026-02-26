@@ -1,6 +1,6 @@
 # SPEC.md — sym_shell
 
-> Versão: 0.3.1
+> Versão: 0.3.2
 > MVP entregue em: 2026-02-25
 > Última atualização: 2026-02-26
 > Status: mvp
@@ -220,3 +220,4 @@ Ao finalizar uma feature (`/feature done`), SPEC.md é atualizado automaticament
 | 0.2.2 | 2026-02-25 | RelayBridge sync→async + attach asyncio loop + AuditLogger wired + RelayConfig | cycle-04 |
 | 0.3.0 | 2026-02-25 | share CLI com RelayHandler inline + double-confirm HIGH risk + toggle indicator + config.yaml.example | cycle-06 |
 | 0.3.1 | 2026-02-26 | Diagramas (class, components, database, architecture) + SPEC.md | — |
+| 0.3.2 | 2026-02-26 | :help + :risk + Ctrl-C LLM cancel + múltiplos comandos + context injection (cwd+last_lines) + :explain streaming + SummarizeCompactor + symrouter | /feature |
