@@ -54,7 +54,7 @@ class TestRelayConfig:
 
     def test_config_loader_cert_defaults_to_none(self, tmp_path) -> None:
         cfg_yaml = tmp_path / "config.yaml"
-        cfg_yaml.write_text("relay:\n  port: 8765\n")
+        cfg_yaml.write_text("relay:\n  port: 8060\n")
         loader = ConfigLoader(config_path=cfg_yaml)
         config = loader.load()
         assert config.relay.cert_file is None
@@ -122,30 +122,30 @@ class TestSslContextBuilders:
 
 class TestRelayUrlUpgrade:
     def test_ws_to_wss_upgrade(self) -> None:
-        assert _relay_url_with_tls("ws://example.com:8765", True) == "wss://example.com:8765"
+        assert _relay_url_with_tls("ws://example.com:8060", True) == "wss://example.com:8060"
 
     def test_wss_stays_wss(self) -> None:
-        assert _relay_url_with_tls("wss://example.com:8765", True) == "wss://example.com:8765"
+        assert _relay_url_with_tls("wss://example.com:8060", True) == "wss://example.com:8060"
 
     def test_no_upgrade_when_tls_false(self) -> None:
-        assert _relay_url_with_tls("ws://example.com:8765", False) == "ws://example.com:8765"
+        assert _relay_url_with_tls("ws://example.com:8060", False) == "ws://example.com:8060"
 
 
 class TestClientSslParam:
     def test_host_relay_client_stores_ssl(self) -> None:
-        client = HostRelayClient("ws://localhost:8765", "s-test", "tok", ssl=True)
+        client = HostRelayClient("ws://localhost:8060", "s-test", "tok", ssl=True)
         assert client._ssl is True
 
     def test_host_relay_client_ssl_none_default(self) -> None:
-        client = HostRelayClient("ws://localhost:8765", "s-test", "tok")
+        client = HostRelayClient("ws://localhost:8060", "s-test", "tok")
         assert client._ssl is None
 
     def test_viewer_client_stores_ssl(self) -> None:
-        vc = ViewerClient("wss://localhost:8765", "s-test", "tok", ssl=True)
+        vc = ViewerClient("wss://localhost:8060", "s-test", "tok", ssl=True)
         assert vc._ssl is True
 
     def test_viewer_client_ssl_none_default(self) -> None:
-        vc = ViewerClient("ws://localhost:8765", "s-test", "tok")
+        vc = ViewerClient("ws://localhost:8060", "s-test", "tok")
         assert vc._ssl is None
 
 

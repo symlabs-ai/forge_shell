@@ -51,8 +51,8 @@ class TestConfigShow:
             cfg.llm.api_key = None
             cfg.llm.timeout_seconds = 30
             cfg.llm.max_retries = 2
-            cfg.relay.url = "ws://localhost:8765"
-            cfg.relay.port = 8765
+            cfg.relay.url = "ws://localhost:8060"
+            cfg.relay.port = 8060
             cfg.relay.tls = False
             cfg.relay.cert_file = None
             cfg.relay.key_file = None
@@ -73,8 +73,8 @@ class TestConfigShow:
             cfg.llm.api_key = None
             cfg.llm.timeout_seconds = 30
             cfg.llm.max_retries = 2
-            cfg.relay.url = "ws://localhost:8765"
-            cfg.relay.port = 8765
+            cfg.relay.url = "ws://localhost:8060"
+            cfg.relay.port = 8060
             cfg.relay.tls = False
             cfg.relay.cert_file = None
             cfg.relay.key_file = None
@@ -99,8 +99,8 @@ class TestConfigShow:
             cfg.llm.api_key = "sk-secret123"
             cfg.llm.timeout_seconds = 30
             cfg.llm.max_retries = 2
-            cfg.relay.url = "ws://localhost:8765"
-            cfg.relay.port = 8765
+            cfg.relay.url = "ws://localhost:8060"
+            cfg.relay.port = 8060
             cfg.relay.tls = False
             cfg.relay.cert_file = None
             cfg.relay.key_file = None
@@ -151,10 +151,10 @@ class TestConfigEdit:
 
 class TestRelayUrlTls:
     def test_ws_upgraded_to_wss_when_tls(self) -> None:
-        assert _relay_url_with_tls("ws://localhost:8765", True) == "wss://localhost:8765"
+        assert _relay_url_with_tls("ws://localhost:8060", True) == "wss://localhost:8060"
 
     def test_wss_unchanged_when_tls(self) -> None:
         assert _relay_url_with_tls("wss://relay.example.com", True) == "wss://relay.example.com"
 
     def test_ws_unchanged_when_no_tls(self) -> None:
-        assert _relay_url_with_tls("ws://localhost:8765", False) == "ws://localhost:8765"
+        assert _relay_url_with_tls("ws://localhost:8060", False) == "ws://localhost:8060"

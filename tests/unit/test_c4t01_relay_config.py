@@ -2,7 +2,7 @@
 C4-T-01 — RelayConfig em SymShellConfig
 DADO ConfigLoader
 QUANDO relay não está no config.yaml
-ENTÃO defaults são carregados (url=ws://localhost:8765, port=8765)
+ENTÃO defaults são carregados (url=ws://localhost:8060, port=8060)
 QUANDO relay está no config.yaml
 ENTÃO valores custom são carregados
 """
@@ -18,11 +18,11 @@ class TestRelayConfigDefaults:
 
     def test_relay_default_url(self) -> None:
         config = ConfigLoader().load()
-        assert config.relay.url == "ws://localhost:8765"
+        assert config.relay.url == "ws://localhost:8060"
 
     def test_relay_default_port(self) -> None:
         config = ConfigLoader().load()
-        assert config.relay.port == 8765
+        assert config.relay.port == 8060
 
     def test_relay_default_tls_false(self) -> None:
         config = ConfigLoader().load()
@@ -51,7 +51,7 @@ class TestRelayConfigFromFile:
         loader = ConfigLoader(config_path=cfg)
         config = loader.load()
         assert config.relay.port == 9999
-        assert config.relay.url == "ws://localhost:8765"  # default mantido
+        assert config.relay.url == "ws://localhost:8060"  # default mantido
 
     def test_non_relay_config_unaffected(self, tmp_path) -> None:
         cfg = tmp_path / "config.yaml"
@@ -59,4 +59,4 @@ class TestRelayConfigFromFile:
         loader = ConfigLoader(config_path=cfg)
         config = loader.load()
         assert config.nl_mode.default_active is False
-        assert config.relay.url == "ws://localhost:8765"  # default relay
+        assert config.relay.url == "ws://localhost:8060"  # default relay

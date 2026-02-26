@@ -51,12 +51,12 @@ class TestRelayTokenValidation:
         return ws
 
     def test_relay_handler_init_accepts_ssl_context(self) -> None:
-        handler = RelayHandler(host="0.0.0.0", port=8765, ssl_context=None)
+        handler = RelayHandler(host="0.0.0.0", port=8060, ssl_context=None)
         assert handler._ssl_context is None
 
     def test_relay_handler_init_stores_ssl_context(self) -> None:
         mock_ctx = MagicMock()
-        handler = RelayHandler(host="0.0.0.0", port=8765, ssl_context=mock_ctx)
+        handler = RelayHandler(host="0.0.0.0", port=8060, ssl_context=mock_ctx)
         assert handler._ssl_context is mock_ctx
 
     @pytest.mark.asyncio
@@ -164,7 +164,7 @@ class TestRelayTokenValidation:
 class TestViewerClientSslParam:
     def test_viewer_client_accepts_ssl_none(self) -> None:
         vc = ViewerClient(
-            relay_url="ws://localhost:8765",
+            relay_url="ws://localhost:8060",
             session_id="s-test",
             token="",
             ssl=None,
@@ -173,7 +173,7 @@ class TestViewerClientSslParam:
 
     def test_viewer_client_accepts_ssl_true(self) -> None:
         vc = ViewerClient(
-            relay_url="wss://localhost:8765",
+            relay_url="wss://localhost:8060",
             session_id="s-test",
             token="tok",
             ssl=True,
@@ -183,7 +183,7 @@ class TestViewerClientSslParam:
     def test_viewer_client_backward_compat_no_ssl_arg(self) -> None:
         """Construção sem ssl= funciona (default None)."""
         vc = ViewerClient(
-            relay_url="ws://localhost:8765",
+            relay_url="ws://localhost:8060",
             session_id="s-test",
             token="",
         )

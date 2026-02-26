@@ -28,8 +28,8 @@ erDiagram
     }
 
     RelayConfig {
-        str  url    "ex: ws://localhost:8765"
-        int  port   "padrão: 8765"
+        str  url    "ex: ws://localhost:8060"
+        int  port   "padrão: 8060"
         bool tls    "padrão: false"
     }
 

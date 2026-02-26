@@ -39,7 +39,7 @@ class RelayHandler:
     def __init__(
         self,
         host: str = "0.0.0.0",
-        port: int = 8765,
+        port: int = 8060,
         ssl_context=None,
     ) -> None:
         self._host = host
