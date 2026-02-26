@@ -33,6 +33,7 @@ class NLResult:
     bash_command: str | None = None
     requires_double_confirm: bool = False
     state_changed: bool = False
+    is_explanation: bool = False
 
 
 class NLModeEngine:
@@ -87,6 +88,12 @@ class NLModeEngine:
             bash_cmd = stripped[1:].lstrip()
             self._state = NLModeState.NL_ACTIVE  # garante retorno ao NL Mode
             return NLResult(bash_command=bash_cmd)
+
+        # --- :explain <cmd> → análise pontual do LLM (funciona em ambos os modos) ---
+        if stripped.lower().startswith(":explain ") and len(stripped) > 9:
+            cmd = stripped[9:].strip()
+            response = self._adapter.explain(command=cmd, context=context, on_chunk=on_chunk)
+            return NLResult(suggestion=response, is_explanation=True)
 
         # --- Bash Mode passthrough ---
         if self._state == NLModeState.BASH_ACTIVE:

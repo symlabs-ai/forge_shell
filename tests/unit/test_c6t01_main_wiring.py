@@ -21,6 +21,7 @@ class TestMainDefaultWiring:
             "src.adapters.cli.main.ForgeLLMAdapter": MagicMock(),
             "src.adapters.cli.main.NLModeEngine": MagicMock(),
             "src.adapters.cli.main.RiskEngine": MagicMock(),
+            "src.adapters.cli.main.Redactor": MagicMock(),
         }
         if extra_patches:
             patches.update(extra_patches)
@@ -55,7 +56,8 @@ class TestMainDefaultWiring:
              patch("src.adapters.cli.main.AuditLogger"), \
              patch("src.adapters.cli.main.ForgeLLMAdapter"), \
              patch("src.adapters.cli.main.NLModeEngine"), \
-             patch("src.adapters.cli.main.RiskEngine"):
+             patch("src.adapters.cli.main.RiskEngine"), \
+             patch("src.adapters.cli.main.Redactor"):
             MockCL.return_value.load.return_value = mock_config
             from src.adapters.cli.main import main
             main([])
@@ -74,7 +76,8 @@ class TestMainDefaultWiring:
              patch("src.adapters.cli.main.AuditLogger") as MockAL, \
              patch("src.adapters.cli.main.ForgeLLMAdapter"), \
              patch("src.adapters.cli.main.NLModeEngine"), \
-             patch("src.adapters.cli.main.RiskEngine"):
+             patch("src.adapters.cli.main.RiskEngine"), \
+             patch("src.adapters.cli.main.Redactor"):
             from src.adapters.cli.main import main
             main([])
 
@@ -93,7 +96,8 @@ class TestMainDefaultWiring:
              patch("src.adapters.cli.main.AuditLogger"), \
              patch("src.adapters.cli.main.ForgeLLMAdapter"), \
              patch("src.adapters.cli.main.NLModeEngine"), \
-             patch("src.adapters.cli.main.RiskEngine"):
+             patch("src.adapters.cli.main.RiskEngine"), \
+             patch("src.adapters.cli.main.Redactor"):
             from src.adapters.cli.main import main
             main([])
 

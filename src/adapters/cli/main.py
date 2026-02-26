@@ -36,6 +36,7 @@ from src.infrastructure.intelligence.risk_engine import RiskEngine
 from src.infrastructure.audit.audit_logger import AuditLogger
 from src.infrastructure.collab.relay_handler import RelayHandler
 from src.infrastructure.collab.relay_bridge import RelayBridge
+from src.infrastructure.intelligence.redaction import Redactor
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -165,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
         session._interceptor = NLInterceptor(nl_engine=engine)
         session._auditor = AuditLogger()
         session._relay_bridge = bridge
+        session._redactor = Redactor.from_profile_name(config.redaction.default_profile)
 
         session._write_startup_hint()
         rc = session.run()
@@ -215,8 +217,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         engine = NLModeEngine(llm_adapter=adapter, risk_engine=RiskEngine())
         session._interceptor = NLInterceptor(nl_engine=engine)
-        # injetar AuditLogger
+        # injetar AuditLogger e Redactor
         session._auditor = AuditLogger()
+        session._redactor = Redactor.from_profile_name(config.redaction.default_profile)
 
     session._write_startup_hint()
     return session.run()

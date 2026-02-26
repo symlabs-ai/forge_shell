@@ -95,9 +95,10 @@ class TestDefaultSessionWired:
 
         with patch("src.adapters.cli.main.TerminalSession", return_value=mock_session):
             with patch("src.adapters.cli.main.ConfigLoader") as MockCL:
-                MockCL.return_value.load.return_value = MagicMock()
-                from src.adapters.cli.main import main
-                rc = main([])
+                with patch("src.adapters.cli.main.Redactor"):
+                    MockCL.return_value.load.return_value = MagicMock()
+                    from src.adapters.cli.main import main
+                    rc = main([])
 
         mock_session.run.assert_called_once()
         assert rc == 0

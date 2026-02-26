@@ -203,7 +203,12 @@ class ForgeLLMAdapter:
 
         return None
 
-    def explain(self, command: str, context: dict) -> NLResponse | None:
+    def explain(
+        self,
+        command: str,
+        context: dict,
+        on_chunk: Callable[[str], None] | None = None,
+    ) -> NLResponse | None:
         """
         Analisar e explicar um comando sem executá-lo (:explain <cmd>).
 
@@ -217,6 +222,19 @@ class ForgeLLMAdapter:
             ChatMessage(role="system", content=_EXPLAIN_SYSTEM_PROMPT),
             ChatMessage(role="user", content=prompt),
         ]
+        if on_chunk is not None:
+            try:
+                raw_content = ""
+                for chunk in self._get_agent().stream_chat(
+                    messages=messages, config=self._config
+                ):
+                    if chunk.content:
+                        raw_content += chunk.content
+                        on_chunk(chunk.content)
+                return self._parse(raw_content)
+            except Exception as exc:
+                log.warning("ForgeLLM explain stream error: %s", exc)
+                return None
         for attempt in range(self._max_retries + 1):
             try:
                 response = self._get_agent().chat(

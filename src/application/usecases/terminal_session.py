@@ -20,6 +20,7 @@ import sys
 import termios
 import threading
 import time
+from collections import deque
 from enum import Enum
 
 # Log de timing para diagnóstico — escreve em /tmp/sym_shell_timing.log
@@ -77,6 +78,10 @@ class TerminalSession:
         self._llm_pending: bool = False  # evita chamadas simultâneas
         self._pty_running: bool = False  # True enquanto comando está em execução no PTY
         self._in_password_entry: bool = False  # True após prompt de senha detectado
+        # contexto LLM: últimas N linhas de output e cwd
+        self._output_lines: deque = deque(maxlen=config.nl_mode.context_lines)
+        self._output_partial: str = ""
+        self._redactor = None  # injetado via DI; None = sem redaction
 
     def _flush_pending_llm(self, timeout: float = 0.5) -> None:
         """Drena resultado pendente do LLM. Usado em testes (sem select loop)."""
@@ -157,9 +162,10 @@ class TerminalSession:
                 is_toggle    = stripped == "!"
                 is_escape    = stripped.startswith("!") and len(stripped) > 1
                 is_bash_mode = self._mode == SessionMode.BASH
-                _tlog.debug("  path: toggle=%s escape=%s bash_mode=%s | stripped=%r",
-                            is_toggle, is_escape, is_bash_mode, stripped)
-                if is_toggle or is_escape or is_bash_mode:
+                is_explain   = stripped.lower().startswith(":explain ") and len(stripped) > 9
+                _tlog.debug("  path: toggle=%s escape=%s bash_mode=%s explain=%s | stripped=%r",
+                            is_toggle, is_escape, is_bash_mode, is_explain, stripped)
+                if is_toggle or is_escape or (is_bash_mode and not is_explain):
                     t1 = time.monotonic()
                     result = self._interceptor.intercept(full)
                     t2 = time.monotonic()
@@ -170,6 +176,8 @@ class TerminalSession:
                 else:
                     self._llm_pending = True
                     _tlog.debug("  dispatching LLM thread for NL query")
+                    if self._interceptor is not None:
+                        self._interceptor.set_context(self._build_context())
                     if out:
                         out.write(b'\033[36m[sym_shell: pensando')
                         out.flush()
@@ -242,6 +250,26 @@ class TerminalSession:
             self._engine.write(b"\r")
             return
 
+        if result.action == InterceptAction.EXPLAIN:
+            suggestion = result.suggestion
+            if suggestion is None:
+                return
+            explanation = getattr(suggestion, "explanation", "") or ""
+            commands = getattr(suggestion, "commands", []) or []
+            risk = getattr(suggestion, "risk_level", None)
+            risk_str = risk.value if hasattr(risk, "value") else str(risk)
+            lines = [b"\r\n"]
+            if commands:
+                lines.append(b"\033[1;34m[?] " + commands[0].encode() + b"\033[0m\r\n")
+            if explanation:
+                lines.append(b"   " + explanation.encode() + b"\r\n")
+            lines.append(b"   Risco: " + risk_str.encode() + b"\r\n\r\n")
+            if out:
+                for line in lines:
+                    out.write(line)
+                out.flush()
+            return
+
         if result.action == InterceptAction.SHOW_SUGGESTION:
             suggestion = result.suggestion
             if suggestion is None:
@@ -280,6 +308,44 @@ class TerminalSession:
                 self._engine.write(commands[0].encode())
             return
 
+    # ------------------------------------------------------------------
+    # Context helpers
+    # ------------------------------------------------------------------
+
+    def _get_cwd(self) -> str:
+        """Retorna o cwd atual do processo bash no PTY via /proc/<pid>/cwd."""
+        try:
+            pid = self._engine.pid
+            if pid is None:
+                return ""
+            return os.readlink(f"/proc/{pid}/cwd")
+        except (OSError, AttributeError):
+            return ""
+
+    def _accumulate_output_lines(self, data: bytes) -> None:
+        """Acumula linhas de output do PTY para contexto LLM (strips ANSI)."""
+        text = self._output_partial + data.decode("utf-8", errors="replace")
+        clean = re.sub(r"\x1b\[[0-9;]*[mKHJA-Za-z]", "", text)
+        lines = clean.split("\n")
+        self._output_partial = lines[-1]  # último fragmento (pode ser incompleto)
+        for line in lines[:-1]:
+            stripped = line.strip()
+            if stripped:
+                self._output_lines.append(stripped)
+
+    def _build_context(self) -> dict:
+        """Constrói dict de contexto {cwd, last_lines} para o LLM."""
+        cwd = self._get_cwd()
+        last_lines = "\n".join(self._output_lines)
+        if self._redactor is not None:
+            last_lines = self._redactor.redact(last_lines)
+        ctx: dict = {}
+        if cwd:
+            ctx["cwd"] = cwd
+        if last_lines:
+            ctx["last_lines"] = last_lines
+        return ctx
+
     def _write_startup_hint(self) -> None:
         """Exibir hint de NL Mode na abertura da sessão (apenas modo NL/BASH)."""
         if self._mode == SessionMode.PASSTHROUGH:
@@ -292,6 +358,7 @@ class TerminalSession:
             b"  |  \033[1mNL Mode\033[0m"
             b"  |  \033[33m!\033[0m para bash"
             b"  |  \033[33m!<cmd>\033[0m bash direto"
+            b"  |  \033[33m:explain <cmd>\033[0m analisar"
             b"\r\n"
         )
         out.write(hint)
@@ -337,6 +404,7 @@ class TerminalSession:
         out = self._stdout or getattr(sys.stdout, "buffer", None)
         if out is not None:
             out.write(data)
+        self._accumulate_output_lines(data)
         if self._relay_bridge is not None:
             try:
                 self._relay_bridge.send(data)
