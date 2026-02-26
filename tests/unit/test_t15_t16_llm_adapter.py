@@ -57,8 +57,9 @@ class TestNLResponse:
 
 class TestForgeLLMAdapter:
     def _make_adapter(self, mock_agent: MagicMock) -> ForgeLLMAdapter:
-        with patch("src.infrastructure.intelligence.forge_llm_adapter.ChatAgent", return_value=mock_agent):
-            return ForgeLLMAdapter(api_key="sk-test", provider="ollama", model="llama3")
+        adapter = ForgeLLMAdapter(api_key="sk-test", provider="ollama", model="llama3")
+        adapter._agent = mock_agent  # injetar mock diretamente (lazy init)
+        return adapter
 
     def test_returns_nl_response_on_valid_json(self) -> None:
         mock_agent = MagicMock()

@@ -73,10 +73,23 @@ class ForgeLLMAdapter:
         timeout_seconds: int = 30,
         max_retries: int = 2,
     ) -> None:
-        resolved_key = api_key or os.environ.get(self._ENV_KEY_MAP.get(provider, ""), None)
-        self._agent = ChatAgent(provider=provider, api_key=resolved_key, model=model)
+        self._provider = provider
+        self._model = model
+        self._api_key = api_key
         self._timeout = timeout_seconds
         self._max_retries = max_retries
+        self._agent = None  # lazy: criado na primeira chamada a request()/explain()
+
+    def _get_agent(self) -> "ChatAgent":
+        """Retorna o ChatAgent, criando-o lazily na primeira chamada."""
+        if self._agent is None:
+            resolved_key = self._api_key or os.environ.get(
+                self._ENV_KEY_MAP.get(self._provider, ""), None
+            )
+            self._agent = ChatAgent(
+                provider=self._provider, api_key=resolved_key, model=self._model
+            )
+        return self._agent
 
     def request(self, text: str, context: dict) -> NLResponse | None:
         """
@@ -93,7 +106,7 @@ class ForgeLLMAdapter:
 
         for attempt in range(self._max_retries + 1):
             try:
-                response = self._agent.chat(messages=messages)
+                response = self._get_agent().chat(messages=messages)
                 return self._parse(response.content)
             except TimeoutError:
                 log.warning("ForgeLLM timeout (attempt %d/%d)", attempt + 1, self._max_retries + 1)
@@ -118,7 +131,7 @@ class ForgeLLMAdapter:
         ]
         for attempt in range(self._max_retries + 1):
             try:
-                response = self._agent.chat(messages=messages)
+                response = self._get_agent().chat(messages=messages)
                 return self._parse(response.content)
             except TimeoutError:
                 log.warning("ForgeLLM explain timeout (attempt %d/%d)", attempt + 1, self._max_retries + 1)
