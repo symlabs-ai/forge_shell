@@ -70,7 +70,7 @@ phases:
 
   - id: ft_plan
     title: "Planning"
-    narrative: "Derivar task list das User Stories do PRD"
+    narrative: "Derivar task list e diagramas técnicos do PRD"
     steps:
       - id: ft.plan.01.task_list
         title: "Criar Task List"
@@ -79,6 +79,27 @@ phases:
         outputs: ["project/docs/TASK_LIST.md"]
         template: "process/fast_track/templates/template_task_list.md"
         symbiote: ft_coach
+
+      - id: ft.plan.02.tech_stack
+        title: "Propor Tech Stack"
+        narrative: "forge_coder analisa PRD e propõe stack técnica inicial; ft_manager apresenta ao stakeholder para alinhamento"
+        inputs: ["project/docs/PRD.md", "project/docs/TASK_LIST.md"]
+        outputs: ["project/docs/tech_stack.md"]
+        symbiote: forge_coder
+        gate: stakeholder_approval
+        frequency: "apenas no primeiro ciclo"
+
+      - id: ft.plan.03.diagrams
+        title: "Gerar Diagramas Técnicos"
+        narrative: "Produzir diagramas mínimos de classe, componentes, banco de dados e arquitetura em Mermaid, baseados no PRD e na stack aprovada"
+        inputs: ["project/docs/PRD.md", "project/docs/TASK_LIST.md", "project/docs/tech_stack.md"]
+        outputs:
+          - "project/docs/diagrams/class.md"
+          - "project/docs/diagrams/components.md"
+          - "project/docs/diagrams/database.md"
+          - "project/docs/diagrams/architecture.md"
+        symbiote: forge_coder
+        frequency: "uma vez no primeiro ciclo; revisado em ciclos subsequentes se houver mudança estrutural"
 
   - id: ft_tdd
     title: "TDD — Test Driven Development"
@@ -136,16 +157,35 @@ phases:
         outputs: ["commit no branch"]
         symbiote: forge_coder
 
+  - id: ft_smoke
+    title: "Smoke — Validação Real do Produto"
+    narrative: "Agente executa o produto real, injeta input e documenta output observado. Sem mocks. Gate antes do E2E formal."
+    steps:
+      - id: ft.smoke.01.cli_run
+        title: "Smoke CLI Run"
+        narrative: "Subir o processo real, injetar input via PTY e verificar output sem mocks de I/O"
+        inputs: ["src/", "tests/smoke/"]
+        outputs: ["project/docs/smoke-cycle-XX.md com output real documentado"]
+        gate: true
+        symbiote: forge_coder
+        checklist:
+          - "Processo sobe sem erro"
+          - "Input injetado via PTY (pexpect ou ptyprocess) — sem simulação"
+          - "Output observado documentado literalmente (não inferido)"
+          - "Nenhum freeze ou hang detectado no fluxo crítico"
+          - "Resultado explícito: PASSOU ou TRAVOU"
+
   - id: ft_e2e
     title: "E2E — CLI Validation Gate"
-    narrative: "Gate obrigatório: validação end-to-end via CLI"
+    narrative: "Gate obrigatório: validação end-to-end via CLI. Exige unit tests E smoke passando."
     steps:
       - id: ft.e2e.01.cli_validation
         title: "E2E CLI Validation"
         narrative: "Executar validação E2E CLI-first. Gate obrigatório para encerrar ciclo."
-        inputs: ["src/", "tests/"]
+        inputs: ["src/", "tests/unit/", "tests/smoke/"]
         outputs: ["tests/e2e/cycle-XX/ com resultados"]
         gate: true
+        requires: ["ft.smoke.01.cli_run"]
         symbiote: forge_coder
 
   - id: ft_feedback
@@ -159,6 +199,23 @@ phases:
         outputs: ["project/docs/retro-cycle-XX.md"]
         template: "process/fast_track/templates/template_retro_note.md"
         symbiote: ft_coach
+
+  - id: ft_handoff
+    title: "Handoff — Modo Manutenção"
+    narrative: "Sintetizar artefatos do MVP em SPEC.md. Ativado uma única vez, ao encerrar o projeto Fast Track."
+    steps:
+      - id: ft.handoff.01.specs
+        title: "Gerar SPEC.md"
+        narrative: "Sintetizar PRD, task list, tech stack e retro notes em documento de referência para manutenção via /feature"
+        inputs:
+          - "project/docs/PRD.md"
+          - "project/docs/TASK_LIST.md"
+          - "project/docs/tech_stack.md"
+          - "project/docs/retro-cycle-*.md"
+        outputs: ["project/docs/SPEC.md"]
+        template: "process/fast_track/templates/template_specs.md"
+        symbiote: ft_coach
+        frequency: "uma vez — ao encerrar o projeto Fast Track (MVP concluído)"
 
 # ============================================================
 # Flow
@@ -266,8 +323,29 @@ flow:
       - all_tasks_have_priority
       - all_tasks_have_size
       - min_1_p0_task
-    on_pass: ft_tdd_01
+    on_pass: ft_plan_02
     on_fail: ft_plan_01
+
+  - id: ft_plan_02
+    type: step
+    step_ref: ft_plan.ft.plan.02.tech_stack
+    next: ft_manager_apresenta_stack
+    condition: "first_cycle_only"
+
+  - id: ft_manager_apresenta_stack
+    type: stakeholder_review
+    orchestrator: ft_manager
+    action: "Apresentar proposta de tech stack ao stakeholder; coletar ajustes e aprovação"
+    branches:
+      - when: "approved"
+        goto: ft_plan_03
+      - when: "adjustments_requested"
+        goto: ft_plan_02
+
+  - id: ft_plan_03
+    type: step
+    step_ref: ft_plan.ft.plan.03.diagrams
+    next: ft_tdd_01
 
   # --- Loop: TDD + Delivery por task ---
 
@@ -323,7 +401,15 @@ flow:
         - when: "more_tasks"
           goto: ft_tdd_01
         - when: "done"
-          goto: ft_e2e_01
+          goto: ft_smoke_01
+
+  # --- Smoke Gate ---
+
+  - id: ft_smoke_01
+    type: step
+    step_ref: ft_smoke.ft.smoke.01.cli_run
+    gate: true
+    next: ft_e2e_01
 
   # --- E2E Gate ---
 
@@ -378,6 +464,17 @@ flow:
   - id: ft_feedback_01_final
     type: step
     step_ref: ft_feedback.ft.feedback.01.retro_note
+    next: ft_handoff_01
+
+  - id: ft_handoff_01
+    type: step
+    step_ref: ft_handoff.ft.handoff.01.specs
+    next: ft_manager_handoff_completo
+
+  - id: ft_manager_handoff_completo
+    type: state_update
+    orchestrator: ft_manager
+    action: "set mvp_delivered: true, maintenance_mode: true in ft_state.yml"
     next: end_completo
 
   # --- Feedback (ciclo normal) ---
@@ -444,6 +541,12 @@ artifacts:
     phase: ft_feedback
     description: "Retrospectiva do ciclo"
 
+  - id: spec
+    path: "project/docs/SPEC.md"
+    phase: ft_handoff
+    description: "Especificação macro do produto entregue — ponto de entrada para manutenção via /feature"
+    frequency: "gerado uma vez ao encerrar Fast Track; atualizado por cada /feature done"
+
 # ============================================================
 # Symbiotas
 # ============================================================
@@ -462,13 +565,14 @@ symbiotes:
     can_decide: true
 
   - name: ft_coach
-    role: "Conduz MDD comprimido (PRD) e planning (task list) — delegado pelo ft_manager"
+    role: "Conduz MDD comprimido (PRD), planning (task list), retro e handoff (SPEC.md) — delegado pelo ft_manager"
     prompt_file: "process/symbiotes/ft_coach/prompt.md"
     capabilities:
       - conduzir_hipotese
       - redigir_prd
       - validar_prd
       - criar_task_list
+      - gerar_specs
     can_decide: false
 
   - name: forge_coder

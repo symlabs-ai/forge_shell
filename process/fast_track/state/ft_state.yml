@@ -8,12 +8,13 @@ orchestrator: ft_manager
 stakeholder_mode: interactive  # interactive | autonomous
 mdd_mode: hyper                # normal | hyper
 mvp_delivered: true
+maintenance_mode: true
 
-current_phase: ft_feedback
+current_phase: ft_handoff
 current_cycle: cycle-06
 
-last_completed_step: ft.e2e.06.production_wiring
-next_recommended_step: release_v0.2.0  # MVP 100% wired — pronto para release
+last_completed_step: ft.handoff.01.specs
+next_recommended_step: null   # projeto em manutenção — usar /feature
 
 completed_steps:
   - ft.mdd.01.hipotese
@@ -58,6 +59,9 @@ completed_steps:
   - ft.tdd.c6.production      # C6-T-01..05: NLInterceptor wired + double-confirm + toggle + share relay + config example
   - ft.e2e.06.production_wiring  # E2E Gate PASSED — 362+24 testes (MVP 100% wired)
   - ft.feedback.06.retro_note # retro-cycle-06.md gerado
+  # handoff
+  - ft.plan.03.diagrams       # 4 diagramas Mermaid gerados retroativamente
+  - ft.handoff.01.specs       # SPEC.md gerado (v0.3.1)
 
 blocked: false
 blocked_reason: null
@@ -70,8 +74,8 @@ metricas:
   ciclos_completos: 6
   tasks_total: 61
   tasks_done: 61
-  tests_passing: 362
+  tests_passing: 418
   tests_skipped: 1
   tests_xfailed: 3
   e2e_gate: passed
-  mvp_status: production_wired
+  mvp_status: demonstravel

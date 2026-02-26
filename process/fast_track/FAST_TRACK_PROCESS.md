@@ -62,7 +62,7 @@ Template: `process/fast_track/templates/template_hyper_questionnaire.md`
 - **Critério**: Dev confirma que PRD reflete a intenção e é implementável
 - **Se rejeitado**: Processo termina (pode reiniciar com nova hipótese)
 
-### Fase 2: Planning — 1 step
+### Fase 2: Planning — 3 steps
 
 #### ft.plan.01.task_list — Criar Task List
 - **Input**: PRD seção 5 (User Stories)
@@ -70,6 +70,27 @@ Template: `process/fast_track/templates/template_hyper_questionnaire.md`
 - **Template**: `process/fast_track/templates/template_task_list.md`
 - **Symbiota**: ft_coach
 - **Critério**: Cada User Story tem pelo menos 1 task, todas priorizadas e estimadas
+
+#### ft.plan.02.tech_stack — Propor Tech Stack *(primeiro ciclo apenas)*
+- **Input**: PRD + TASK_LIST
+- **Output**: `project/docs/tech_stack.md`
+- **Symbiota**: forge_coder
+- **Gate**: aprovação do stakeholder (ft_manager apresenta, stakeholder revisa e aprova)
+- **Critério**: stack aprovada pelo stakeholder; dúvidas respondidas; decision log preenchido
+- **Conteúdo**: linguagem/runtime, framework, persistência, libs-chave, ferramentas de dev, alternativas descartadas, dúvidas para o stakeholder
+
+#### ft.plan.03.diagrams — Gerar Diagramas Técnicos *(primeiro ciclo; revisado se estrutura mudar)*
+- **Input**: PRD + TASK_LIST + tech_stack.md aprovada
+- **Output**: `project/docs/diagrams/` (4 arquivos Mermaid)
+- **Symbiota**: forge_coder
+- **Critério**: diagramas derivados do PRD, sem especulação; escopo limitado ao ciclo atual
+
+| Diagrama | Arquivo | Formato Mermaid |
+|----------|---------|-----------------|
+| Classes | `diagrams/class.md` | `classDiagram` |
+| Componentes | `diagrams/components.md` | `flowchart TD` |
+| Banco de Dados | `diagrams/database.md` | `erDiagram` |
+| Arquitetura | `diagrams/architecture.md` | `flowchart TD` |
 
 ### Fase 3: TDD — 3 steps (loop por task)
 
@@ -139,6 +160,24 @@ Template: `process/fast_track/templates/template_hyper_questionnaire.md`
 
 > **Decisão final**: Iniciar novo ciclo (volta para ft.plan.01) ou encerrar.
 
+### Fase 7: Handoff — 1 step *(executado uma única vez, ao encerrar o projeto)*
+
+#### ft.handoff.01.specs — Gerar SPEC.md
+
+- **Gatilho**: stakeholder confirma "MVP concluído"
+- **Input**: PRD.md + TASK_LIST.md + tech_stack.md + todos os retro-cycle-XX.md
+- **Output**: `project/docs/SPEC.md`
+- **Template**: `process/fast_track/templates/template_specs.md`
+- **Symbiota**: ft_coach
+- **Critério**: SPEC.md cobre visão, escopo entregue, funcionalidades com entrypoints reais, tech stack e instruções de manutenção via `/feature`
+
+**O que é o SPEC.md:**
+- Registro do que foi construído (não o plano — esse é o PRD)
+- Contexto permanente lido pelo `/feature` antes de implementar extensões
+- Documento vivo: atualizado a cada `/feature done`
+
+**Após geração:** `maintenance_mode: true` é gravado no state. O projeto passa a ser evoluído via `/feature`, que lê o SPEC.md como contexto.
+
 ---
 
 ## Regras
@@ -170,6 +209,17 @@ Template: `process/fast_track/templates/template_hyper_questionnaire.md`
 **`interactive`** (padrão): ao final de cada ciclo, ft_manager apresenta os resultados E2E ao stakeholder e aguarda decisão (novo ciclo, ajustes ou MVP concluído).
 
 **`autonomous`**: ativado quando o stakeholder diz "continue sem validação". ft_manager roda todos os ciclos sem interrupção, valida internamente, e aciona o stakeholder apenas na entrega final do MVP.
+
+### Modo `maintenance`
+
+Ativado após `ft.handoff.01.specs` ser concluído (`maintenance_mode: true` no state).
+O projeto saiu do Fast Track e é evoluído via `/feature`:
+
+```
+/feature <descrição da nova feature>
+```
+
+O agente `/feature` lê `project/docs/SPEC.md` para entender o contexto e atualiza o SPEC.md ao finalizar (`/feature done`).
 
 ---
 

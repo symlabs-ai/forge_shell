@@ -4,7 +4,7 @@
 
 ## O que é
 
-ForgeProcess: **12 steps, 3 symbiotas, 1 PRD**.
+ForgeProcess: **16 steps, 3 symbiotas, 1 PRD → 1 SPEC**.
 Para solo dev + AI. Sem BDD Gherkin, sem sprints formais, sem roadmap separado.
 
 `ft_manager` orquestra tudo. `ft_coach` e `forge_coder` executam quando delegados.
@@ -31,21 +31,29 @@ ft.plan.01.task_list
   [ft_manager valida task list]
   |
   v
+ft.plan.02.tech_stack (forge_coder propõe) → stakeholder revisa/aprova
+  |
+  v
+ft.plan.03.diagrams (class / components / database / architecture)
+  |
+  v
 LOOP[
   ft.tdd.01.selecao -> ft.tdd.02.red -> ft.tdd.03.green
   -> ft.delivery.01.implement -> ft.delivery.02.self_review -> ft.delivery.03.commit
   [ft_manager valida entrega]
   -> more_tasks? -> LOOP / done? -> EXIT
 ]
-  -> ft.e2e.01.cli_validation (GATE)
+  -> ft.smoke.01.cli_run (GATE — processo real, PTY real, sem mocks, output documentado)
+  -> ft.e2e.01.cli_validation (GATE — unit + smoke)
   -> [ft_manager decide modo]
      interactive: apresenta ao stakeholder -> feedback / MVP / autonomous
      autonomous:  valida internamente -> prossegue até MVP -> apresenta stakeholder
   -> ft.feedback.01.retro_note
-  -> continue? -> ft.plan.01 / complete? -> END
+  -> continue? -> ft.plan.01
+  -> complete? -> ft.handoff.01.specs (gerar SPEC.md) -> END [maintenance_mode: true]
 ```
 
-## Step IDs (12 total)
+## Step IDs (16 total)
 
 | ID | Executor | Orquestrado por |
 |----|----------|-----------------|
@@ -53,14 +61,18 @@ LOOP[
 | ft.mdd.02.prd | ft_coach | ft_manager |
 | ft.mdd.03.validacao | ft_coach | ft_manager |
 | ft.plan.01.task_list | ft_coach | ft_manager |
+| ft.plan.02.tech_stack | forge_coder | ft_manager |
+| ft.plan.03.diagrams | forge_coder | ft_manager |
 | ft.tdd.01.selecao | forge_coder | ft_manager |
 | ft.tdd.02.red | forge_coder | ft_manager |
 | ft.tdd.03.green | forge_coder | ft_manager |
 | ft.delivery.01.implement | forge_coder | ft_manager |
 | ft.delivery.02.self_review | forge_coder | ft_manager |
 | ft.delivery.03.commit | forge_coder | ft_manager |
+| ft.smoke.01.cli_run | forge_coder | ft_manager |
 | ft.e2e.01.cli_validation | forge_coder | ft_manager |
 | ft.feedback.01.retro_note | ft_coach | ft_manager |
+| ft.handoff.01.specs | ft_coach | ft_manager |
 
 ## Artefatos
 
@@ -68,24 +80,36 @@ LOOP[
 |----------|------|-----------|
 | PRD | project/docs/PRD.md | ft.mdd.02.prd |
 | Task List | project/docs/TASK_LIST.md | ft.plan.01.task_list |
+| Tech Stack | project/docs/tech_stack.md | ft.plan.02.tech_stack |
+| Diagramas | project/docs/diagrams/ | ft.plan.03.diagrams |
 | Código | src/ | ft.tdd.03.green |
 | Testes | tests/ | ft.tdd.02.red |
 | Retro | project/docs/retro-cycle-XX.md | ft.feedback.01.retro_note |
+| SPEC | project/docs/SPEC.md | ft.handoff.01.specs |
 
 ## Regras Críticas
 
-1. **E2E CLI gate é obrigatório** — Ciclo não fecha sem `tests/e2e/cycle-XX/run-all.sh` passando.
-2. **TDD Red-Green** — Teste falhando antes de código. Sempre.
-3. **PRD é fonte única** — Sem documentos satélite.
-4. **ACs substituem BDD** — Given/When/Then dentro do PRD, sem .feature files.
-5. **ft_manager valida tudo** — Nenhuma fase avança sem checkpoint de validação passar.
-6. **Modo autônomo não dispensa critérios** — ft_manager valida internamente com os mesmos padrões.
+1. **Smoke gate é obrigatório** — Ciclo não avança sem produto real executado e output documentado.
+2. **E2E CLI gate é obrigatório** — Ciclo não fecha sem `run-all.sh` passando (unit + smoke).
+3. **`mvp_status: demonstravel` exige smoke PASSOU** — nunca declarar com base em unit tests.
+4. **TDD Red-Green** — Teste falhando antes de código. Sempre.
+5. **PRD é fonte única** — Sem documentos satélite.
+6. **ACs substituem BDD** — Given/When/Then dentro do PRD, sem .feature files.
+7. **ft_manager valida tudo** — Nenhuma fase avança sem checkpoint de validação passar.
+8. **Modo autônomo não dispensa critérios** — ft_manager valida internamente com os mesmos padrões.
+9. **SPEC.md é obrigatório ao encerrar** — MVP concluído sem SPEC.md gerado não está realmente encerrado.
+10. **SPEC.md reflete o entregue, não o planejado** — features não implementadas vão para "fora do escopo".
 
 ## Stakeholder Mode
 
 Campo `stakeholder_mode` em `ft_state.yml`:
 - `interactive`: stakeholder vê E2E ao fim de cada ciclo
 - `autonomous`: stakeholder só vê na entrega final do MVP
+
+## Modo Manutenção
+
+Após `ft.handoff.01.specs`, `maintenance_mode: true` no state.
+Evolução do projeto via `/feature <descrição>` — agente lê `project/docs/SPEC.md` como contexto.
 
 ## Estado
 
