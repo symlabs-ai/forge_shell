@@ -18,6 +18,7 @@ import asyncio
 import base64
 import json
 import logging
+from http import HTTPStatus
 from typing import Callable
 
 try:
@@ -54,9 +55,22 @@ class RelayHandler:
         kwargs = {}
         if self._ssl_context is not None:
             kwargs["ssl"] = self._ssl_context
-        async with websockets.serve(self._handle, self._host, self._port, **kwargs) as server:
+        async with websockets.serve(
+            self._handle,
+            self._host,
+            self._port,
+            process_request=self._process_request,
+            **kwargs,
+        ) as server:
             self._server = server
             await self._stop_event.wait()
+
+    async def _process_request(self, connection, request):
+        """Intercepta HTTP antes do upgrade WebSocket — health check."""
+        if request.path == "/health":
+            active = sum(1 for s in _sessions.values() if s.get("host"))
+            body = json.dumps({"status": "ok", "active_sessions": active})
+            return connection.respond(HTTPStatus.OK, body + "\n")
 
     def stop(self) -> None:
         self._stop_event.set()

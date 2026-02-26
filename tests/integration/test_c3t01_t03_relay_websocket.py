@@ -39,6 +39,44 @@ async def relay(free_port):
         pass
 
 
+class TestRelayHealthCheck:
+    async def test_health_returns_200_json(self, relay) -> None:
+        handler, port = relay
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        writer.write(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        await writer.drain()
+        response = await asyncio.wait_for(reader.read(4096), timeout=3)
+        text = response.decode()
+        writer.close()
+        assert "200 OK" in text
+        body = text.split("\r\n\r\n", 1)[1]
+        data = json.loads(body)
+        assert data["status"] == "ok"
+        assert "active_sessions" in data
+
+    async def test_health_counts_active_sessions(self, relay) -> None:
+        handler, port = relay
+        import websockets
+
+        # Register a host session
+        async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
+            await ws.send(json.dumps({
+                "type": "session_join",
+                "session_id": "s-health",
+                "payload": {"role": "host", "token": "tok"},
+            }).encode())
+            await asyncio.sleep(0.05)
+
+            reader, writer = await asyncio.open_connection("127.0.0.1", port)
+            writer.write(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            await writer.drain()
+            response = await asyncio.wait_for(reader.read(4096), timeout=3)
+            body = response.decode().split("\r\n\r\n", 1)[1]
+            data = json.loads(body)
+            assert data["active_sessions"] == 1
+            writer.close()
+
+
 class TestRelayHandler:
     async def test_handler_accepts_connection(self, relay) -> None:
         handler, port = relay
