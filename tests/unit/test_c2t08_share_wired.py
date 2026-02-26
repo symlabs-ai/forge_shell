@@ -1,7 +1,7 @@
 """
 C2-T-08 — CLI share subcommand wired
 DADO o CLI com ShareSession mockado
-QUANDO invoco 'sym_shell share'
+QUANDO invoco 'forge_shell share'
 ENTÃO ShareSession é chamado e machine_code/password são exibidos
 """
 import pytest

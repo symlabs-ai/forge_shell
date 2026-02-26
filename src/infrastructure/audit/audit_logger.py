@@ -1,5 +1,5 @@
 """
-AuditLogger — trilha de auditoria estruturada de sessão sym_shell.
+AuditLogger — trilha de auditoria estruturada de sessão forge_shell.
 
 Registra comandos executados, aprovações, origens e eventos de sessão.
 Exporta em JSON estruturado e texto plano legível.
@@ -47,14 +47,14 @@ class AuditRecord:
 
 class AuditLogger:
     """
-    Logger de auditoria para sessão sym_shell.
+    Logger de auditoria para sessão forge_shell.
 
     Mantém registros em memória e permite export em JSON ou texto.
     """
 
     def __init__(self, log_dir: Path | None = None) -> None:
         self._records: list[AuditRecord] = []
-        self._log_dir = log_dir or Path.home() / ".sym_shell" / "audit"
+        self._log_dir = log_dir or Path.home() / ".forge_shell" / "audit"
 
     def log_command(self, command: str, origin: str, exit_code: int) -> None:
         self._append(AuditRecord(

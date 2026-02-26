@@ -1,7 +1,7 @@
 """
-Config loader — ~/.sym_shell/config.yaml
+Config loader — ~/.forge_shell/config.yaml
 
-Carrega configuração do sym_shell com merge de defaults.
+Carrega configuração do forge_shell com merge de defaults.
 Valores ausentes no arquivo são preenchidos pelos defaults definidos aqui.
 """
 from __future__ import annotations
@@ -67,7 +67,7 @@ class CollabConfig:
 
 
 @dataclass
-class SymShellConfig:
+class ForgeShellConfig:
     nl_mode: NLModeConfig = field(default_factory=NLModeConfig)
     redaction: RedactionConfig = field(default_factory=RedactionConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
@@ -106,7 +106,7 @@ def _default_redaction_profiles() -> dict[str, RedactionProfileConfig]:
 # ---------------------------------------------------------------------------
 
 _CONFIG_EXAMPLE = """\
-# sym_shell — configuração (~/.sym_shell/config.yaml)
+# forge_shell — configuração (~/.forge_shell/config.yaml)
 # Copie para config.yaml e ajuste conforme necessário.
 
 nl_mode:
@@ -130,11 +130,11 @@ llm:
   max_retries: 2
 
 relay:
-  url: ws://localhost:8060     # URL do relay para 'sym_shell attach' (ws:// ou wss://)
-  port: 8060                   # porta do relay para 'sym_shell share'
+  url: ws://localhost:8060     # URL do relay para 'forge_shell attach' (ws:// ou wss://)
+  port: 8060                   # porta do relay para 'forge_shell share'
   tls: false                   # TLS ativo (true → wss://, requer cert_file + key_file)
-  # cert_file: /etc/sym_shell/server.crt   # certificado TLS do servidor (PEM)
-  # key_file:  /etc/sym_shell/server.key   # chave privada TLS do servidor (PEM)
+  # cert_file: /etc/forge_shell/server.crt   # certificado TLS do servidor (PEM)
+  # key_file:  /etc/forge_shell/server.key   # chave privada TLS do servidor (PEM)
 
 collab:
   permanent_password: null     # senha fixa entre sessões (null = nova senha a cada share)
@@ -146,7 +146,7 @@ redaction:
 
 class ConfigLoader:
     """
-    Carrega ``~/.sym_shell/config.yaml`` e faz merge com os defaults.
+    Carrega ``~/.forge_shell/config.yaml`` e faz merge com os defaults.
 
     Se o arquivo não existir, retorna config com todos os defaults.
     Se uma chave estiver ausente no arquivo, o default é usado.
@@ -154,10 +154,10 @@ class ConfigLoader:
     """
 
     def __init__(self, config_path: Path | None = None) -> None:
-        self._path = config_path or Path.home() / ".sym_shell" / "config.yaml"
+        self._path = config_path or Path.home() / ".forge_shell" / "config.yaml"
 
     def ensure_config_dir(self) -> None:
-        """Cria ~/.sym_shell/ e config.yaml.example se não existirem (best-effort)."""
+        """Cria ~/.forge_shell/ e config.yaml.example se não existirem (best-effort)."""
         try:
             cfg_dir = self._path.parent
             cfg_dir.mkdir(parents=True, exist_ok=True)
@@ -167,7 +167,7 @@ class ConfigLoader:
         except (OSError, PermissionError):
             pass
 
-    def load(self) -> SymShellConfig:
+    def load(self) -> ForgeShellConfig:
         self.ensure_config_dir()
         raw: dict[str, Any] = {}
         if self._path.exists():
@@ -176,7 +176,7 @@ class ConfigLoader:
 
         return self._build(raw)
 
-    def _build(self, raw: dict[str, Any]) -> SymShellConfig:
+    def _build(self, raw: dict[str, Any]) -> ForgeShellConfig:
         nl_raw = raw.get("nl_mode", {})
         redaction_raw = raw.get("redaction", {})
         llm_raw = raw.get("llm", {})
@@ -229,4 +229,4 @@ class ConfigLoader:
             permanent_password=collab_raw.get("permanent_password", None),
         )
 
-        return SymShellConfig(nl_mode=nl_mode, redaction=redaction, llm=llm, relay=relay, collab=collab)
+        return ForgeShellConfig(nl_mode=nl_mode, redaction=redaction, llm=llm, relay=relay, collab=collab)

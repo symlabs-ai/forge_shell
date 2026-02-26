@@ -1,4 +1,4 @@
-# Architecture Diagram — sym_shell
+# Architecture Diagram — forge_shell
 
 Arquitetura de runtime: como o input do usuário flui do teclado até o PTY e como o NL pipeline e o relay colaborativo se encaixam na sessão.
 
@@ -6,7 +6,7 @@ Arquitetura de runtime: como o input do usuário flui do teclado até o PTY e co
 flowchart TD
     USER["Usuário\n(teclado)"]
 
-    subgraph HOST["Processo sym_shell (host)"]
+    subgraph HOST["Processo forge_shell (host)"]
         direction TB
 
         STDIN["stdin (raw mode)"]
@@ -49,7 +49,7 @@ flowchart TD
         CHAT["chat broadcast\n(host ↔ viewers)"]
     end
 
-    subgraph VIEWER["Processo sym_shell attach (viewer)"]
+    subgraph VIEWER["Processo forge_shell attach (viewer)"]
         VC["ViewerClient\n[asyncio receive loop]"]
         VOUT["stdout viewer\n[renderiza output remoto]"]
     end
@@ -58,8 +58,8 @@ flowchart TD
         AGENT["ChatAgent\n[provider: ollama | openai | anthropic | xai | symrouter]"]
     end
 
-    subgraph CONFIG["~/.sym_shell/config.yaml"]
-        CFG["SymShellConfig\n[NLMode · LLM · Relay · Redaction]"]
+    subgraph CONFIG["~/.forge_shell/config.yaml"]
+        CFG["ForgeShellConfig\n[NLMode · LLM · Relay · Redaction]"]
     end
 
     %% ── Input flow ──────────────────────────────────────────

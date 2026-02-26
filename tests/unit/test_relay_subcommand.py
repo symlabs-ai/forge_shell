@@ -1,7 +1,7 @@
 """
-relay standalone subcommand — sym_shell relay
+relay standalone subcommand — forge_shell relay
 DADO o CLI com subcomando relay
-QUANDO invoco 'sym_shell relay'
+QUANDO invoco 'forge_shell relay'
 ENTÃO RelayHandler é iniciado como serviço standalone (sem PTY)
 """
 import pytest

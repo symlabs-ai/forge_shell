@@ -34,29 +34,29 @@ class TestStartupHint:
     def test_terminal_session_has_startup_hint(self) -> None:
         """TerminalSession deve ter método _write_startup_hint."""
         from src.application.usecases.terminal_session import TerminalSession
-        from src.infrastructure.config.loader import SymShellConfig
-        session = TerminalSession(config=SymShellConfig())
+        from src.infrastructure.config.loader import ForgeShellConfig
+        session = TerminalSession(config=ForgeShellConfig())
         assert hasattr(session, "_write_startup_hint")
 
     def test_startup_hint_writes_nl_mode_info(self) -> None:
         """_write_startup_hint deve mencionar NL Mode e atalhos."""
         from src.application.usecases.terminal_session import TerminalSession
-        from src.infrastructure.config.loader import SymShellConfig, NLModeConfig
-        session = TerminalSession(config=SymShellConfig(nl_mode=NLModeConfig(default_active=True)))
+        from src.infrastructure.config.loader import ForgeShellConfig, NLModeConfig
+        session = TerminalSession(config=ForgeShellConfig(nl_mode=NLModeConfig(default_active=True)))
         out = MagicMock()
         session._stdout = out
         session._write_startup_hint()
         written = b"".join(
             call.args[0] for call in out.write.call_args_list if call.args
         )
-        assert b"NL" in written or b"sym_shell" in written
+        assert b"NL" in written or b"forge_shell" in written
         assert b"!" in written
 
     def test_no_hint_in_passthrough_mode(self) -> None:
         """Modo --passthrough não deve exibir hint de NL Mode."""
         from src.application.usecases.terminal_session import TerminalSession
-        from src.infrastructure.config.loader import SymShellConfig
-        session = TerminalSession(config=SymShellConfig(), passthrough=True)
+        from src.infrastructure.config.loader import ForgeShellConfig
+        session = TerminalSession(config=ForgeShellConfig(), passthrough=True)
         out = MagicMock()
         session._stdout = out
         session._write_startup_hint()

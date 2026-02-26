@@ -2,7 +2,7 @@
 Redactor — mascara segredos antes de enviar contexto ao ForgeLLM.
 
 Suporta perfis dev (permissivo) e prod (restritivo), configuráveis
-em ~/.sym_shell/config.yaml.
+em ~/.forge_shell/config.yaml.
 """
 from __future__ import annotations
 

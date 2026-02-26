@@ -1,7 +1,7 @@
 """
 HostRelayClient — C3-T-02.
 
-Cliente WebSocket do host sym_shell. Conecta ao relay, registra como host
+Cliente WebSocket do host forge_shell. Conecta ao relay, registra como host
 e envia PTY output codificado em base64 para broadcast aos viewers.
 """
 from __future__ import annotations

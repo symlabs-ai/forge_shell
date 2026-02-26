@@ -16,12 +16,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 from src.application.usecases.terminal_session import TerminalSession, SessionMode
-from src.infrastructure.config.loader import SymShellConfig, NLModeConfig, LLMConfig, RedactionConfig
+from src.infrastructure.config.loader import ForgeShellConfig, NLModeConfig, LLMConfig, RedactionConfig
 from src.infrastructure.terminal_engine.pty_engine import PTYEngine
 
 
 def _config(nl_active=True):
-    return SymShellConfig(
+    return ForgeShellConfig(
         nl_mode=NLModeConfig(default_active=nl_active),
         redaction=RedactionConfig(),
         llm=LLMConfig(),

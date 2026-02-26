@@ -10,11 +10,11 @@ import pytest
 from unittest.mock import MagicMock
 from src.application.usecases.terminal_session import TerminalSession, SessionMode
 from src.application.usecases.nl_interceptor import InterceptResult, InterceptAction
-from src.infrastructure.config.loader import SymShellConfig, NLModeConfig
+from src.infrastructure.config.loader import ForgeShellConfig, NLModeConfig
 
 
 def _make_session(nl_active=True):
-    session = TerminalSession(config=SymShellConfig(nl_mode=NLModeConfig(default_active=nl_active)))
+    session = TerminalSession(config=ForgeShellConfig(nl_mode=NLModeConfig(default_active=nl_active)))
     session._engine = MagicMock()
     session._detector = MagicMock()
     session._detector.is_active = False

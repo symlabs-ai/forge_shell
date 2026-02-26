@@ -1,6 +1,6 @@
-# PRD — sym_shell
+# PRD — forge_shell
 
-> Projeto: sym_shell
+> Projeto: forge_shell
 > Autor: stakeholder
 > Data: 2026-02-25
 > Status: draft
@@ -72,40 +72,40 @@ Dev/ops solo e times pequenos; mercado de ferramentas de produtividade para term
 ### US-01: Entrada em linguagem natural (NL Mode como default)
 **Como** dev/ops, **quero** descrever o que preciso fazer em português/inglês, **para** receber um comando Bash correto sem precisar lembrar flags e sintaxe.
 
-> **NL Mode é o estado padrão.** Ao abrir o sym_shell, o usuário já está em NL Mode.
-> Hint exibido na abertura: `sym_shell  |  NL Mode  |  ! para bash  |  !<cmd> executa bash direto`
+> **NL Mode é o estado padrão.** Ao abrir o forge_shell, o usuário já está em NL Mode.
+> Hint exibido na abertura: `forge_shell  |  NL Mode  |  ! para bash  |  !<cmd> executa bash direto`
 
 **Acceptance Criteria:**
-- **AC-01**: Given sym_shell está aberto (NL Mode ativo), When digito `listar arquivos maiores que 500MB`, Then sym_shell exibe comando sugerido, explicação curta e classificação de risco (baixo/médio/alto).
-- **AC-02**: Given NL Mode ativo, When digito `!ls -al`, Then sym_shell executa `ls -al` diretamente no Bash e retorna ao NL Mode automaticamente.
-- **AC-03**: Given NL Mode ativo, When digito `!` sozinho, Then sym_shell alterna para Bash Mode; digitando `!` novamente, retorna ao NL Mode (toggle).
+- **AC-01**: Given forge_shell está aberto (NL Mode ativo), When digito `listar arquivos maiores que 500MB`, Then forge_shell exibe comando sugerido, explicação curta e classificação de risco (baixo/médio/alto).
+- **AC-02**: Given NL Mode ativo, When digito `!ls -al`, Then forge_shell executa `ls -al` diretamente no Bash e retorna ao NL Mode automaticamente.
+- **AC-03**: Given NL Mode ativo, When digito `!` sozinho, Then forge_shell alterna para Bash Mode; digitando `!` novamente, retorna ao NL Mode (toggle).
 - **AC-04**: Given uma sugestão NL exibida, When seleciono "Executar", Then o comando é executado após confirmação explícita do usuário.
 - **AC-05**: Given o risco é classificado como alto, When a sugestão é exibida, Then é exigida confirmação dupla (double confirm) antes de executar.
-- **AC-06**: Given o adapter ForgeLLM retorna resposta fora do schema, When NL Mode processa, Then sym_shell exibe "não consegui" sem travar o terminal.
+- **AC-06**: Given o adapter ForgeLLM retorna resposta fora do schema, When NL Mode processa, Then forge_shell exibe "não consegui" sem travar o terminal.
 
 ### US-02: Terminal nativo (PTY real)
-**Como** usuário do sym_shell, **quero** que o terminal se comporte exatamente como Bash nativo, **para** usar `sudo`, `ssh`, `vim`, `top`, job control e qualquer app interativo sem quebras.
+**Como** usuário do forge_shell, **quero** que o terminal se comporte exatamente como Bash nativo, **para** usar `sudo`, `ssh`, `vim`, `top`, job control e qualquer app interativo sem quebras.
 
 **Acceptance Criteria:**
-- **AC-01**: Given sym_shell está rodando, When executo `sudo ls`, Then o prompt de senha aparece e funciona sem quebrar o TTY.
+- **AC-01**: Given forge_shell está rodando, When executo `sudo ls`, Then o prompt de senha aparece e funciona sem quebrar o TTY.
 - **AC-02**: Given um processo em foreground, When pressiono Ctrl+Z, Then o processo é suspenso e `bg`/`fg` funcionam corretamente.
 - **AC-03**: Given `vim` está aberto, When redimensiono a janela do terminal, Then o vim adapta o layout via SIGWINCH.
-- **AC-04**: Given sym_shell é encerrado (normalmente ou por crash), When retorno ao terminal do host, Then o estado do terminal (termios) está restaurado — sem "modo doido".
-- **AC-05**: Given `vim` está aberto (alternate screen buffer ativo), When o modo NL é acionado, Then sym_shell não tenta interceptar a linha do vim.
+- **AC-04**: Given forge_shell é encerrado (normalmente ou por crash), When retorno ao terminal do host, Then o estado do terminal (termios) está restaurado — sem "modo doido".
+- **AC-05**: Given `vim` está aberto (alternate screen buffer ativo), When o modo NL é acionado, Then forge_shell não tenta interceptar a linha do vim.
 
 ### US-03: Explicação e análise de risco
 **Como** dev/ops, **quero** entender o que um comando faz e qual seu risco, **para** tomar decisões seguras antes de executar.
 
 **Acceptance Criteria:**
-- **AC-01**: Given um comando qualquer, When digito `:explain rm -rf /tmp/teste`, Then sym_shell exibe descrição do que o comando faz e impacto esperado.
+- **AC-01**: Given um comando qualquer, When digito `:explain rm -rf /tmp/teste`, Then forge_shell exibe descrição do que o comando faz e impacto esperado.
 - **AC-02**: Given um comando destrutivo (`rm -rf`, `dd`, `mkfs`, `chmod -R`), When o risk engine analisa, Then a classificação retorna "alto" e é exigido double confirm.
-- **AC-03**: Given `:risk <cmd>`, When executado, Then sym_shell exibe classificação de risco sem executar o comando.
+- **AC-03**: Given `:risk <cmd>`, When executado, Then forge_shell exibe classificação de risco sem executar o comando.
 
 ### US-04: Sessão remota (view-only + chat)
 **Como** engenheiro de suporte ou mentor, **quero** visualizar o terminal de outro usuário em tempo real com chat lateral, **para** orientar sem precisar de call ou troca de prints.
 
 **Acceptance Criteria:**
-- **AC-01**: Given o host executa `sym_shell share`, When o remoto acessa com o token recebido, Then o remoto vê o terminal do host em tempo real (read-only).
+- **AC-01**: Given o host executa `forge_shell share`, When o remoto acessa com o token recebido, Then o remoto vê o terminal do host em tempo real (read-only).
 - **AC-02**: Given uma sessão ativa, When o remoto digita no chat, Then a mensagem aparece para o host (e vice-versa).
 - **AC-03**: Given uma sessão ativa com modo view-only, When o remoto tenta injetar input no terminal, Then a ação é bloqueada — sem efeito no terminal do host.
 - **AC-04**: Given uma sessão ativa, When o host está digitando uma senha (echo off), Then o input não é transmitido para o remoto.
@@ -162,7 +162,7 @@ Dev/ops solo e times pequenos; mercado de ferramentas de produtividade para term
 | 7 | NL Mode como estado padrão | UX orientada a linguagem natural; bash acessível via `!` | Bash como default, NL via atalho | 2026-02-25 |
 | 8 | Relay intermediário (host↔relay↔client); cliente é terminal | Sem necessidade de porta aberta no host; UI administrativa no relay | Acesso direto IP:porta | 2026-02-25 |
 | 9 | Binário standalone via PyInstaller | Instalação sem dependência de Python no host | pip install, conda | 2026-02-25 |
-| 10 | Config em `~/.sym_shell/config.yaml` | Padrão Unix para apps de terminal; YAML legível | .env, TOML, flags only | 2026-02-25 |
+| 10 | Config em `~/.forge_shell/config.yaml` | Padrão Unix para apps de terminal; YAML legível | .env, TOML, flags only | 2026-02-25 |
 | 11 | Perfis de redaction (`dev`/`prod`) no MVP | Contexto rico em dev; máxima privacidade em prod | Redaction global única | 2026-02-25 |
 | 12 | MIT open-source | Sem restrições de dependências; adoção comunitária | Closed-source, BSL | 2026-02-25 |
 
@@ -189,4 +189,4 @@ Dev/ops solo e times pequenos; mercado de ferramentas de produtividade para term
 - 100% de compatibilidade Bash em todos os cenários (meta é compatibilidade pragmática)
 - Windows (fase 1.2), macOS (fase 1.1)
 - UI browser para cliente remoto (cliente é terminal; relay pode ter admin web separado)
-- Login shell (sym_shell é aplicativo CLI, não substitui o shell padrão do sistema)
+- Login shell (forge_shell é aplicativo CLI, não substitui o shell padrão do sistema)

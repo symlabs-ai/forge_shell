@@ -24,7 +24,7 @@ class TestPyprojectToml:
 
     def test_has_entry_point(self) -> None:
         content = (ROOT / "pyproject.toml").read_text()
-        assert 'sym_shell' in content
+        assert 'forge_shell' in content
 
     def test_entry_point_points_to_main(self) -> None:
         content = (ROOT / "pyproject.toml").read_text()
@@ -32,7 +32,7 @@ class TestPyprojectToml:
 
     def test_has_project_name(self) -> None:
         content = (ROOT / "pyproject.toml").read_text()
-        assert 'sym-shell' in content or 'sym_shell' in content
+        assert 'forge-shell' in content or 'forge_shell' in content
 
     def test_has_python_requires(self) -> None:
         content = (ROOT / "pyproject.toml").read_text()

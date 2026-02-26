@@ -64,7 +64,7 @@ class TestDoctorWired:
 
     def test_doctor_prints_report(self, capsys) -> None:
         mock_report = MagicMock()
-        mock_report.to_text.return_value = "sym_shell doctor OK"
+        mock_report.to_text.return_value = "forge_shell doctor OK"
         mock_report.overall.value = "ok"
 
         with patch("src.adapters.cli.main.DoctorRunner") as MockRunner:
@@ -73,7 +73,7 @@ class TestDoctorWired:
             main(["doctor"])
 
         captured = capsys.readouterr()
-        assert "sym_shell doctor OK" in captured.out
+        assert "forge_shell doctor OK" in captured.out
 
     def test_doctor_returns_1_on_fail(self) -> None:
         mock_report = MagicMock()

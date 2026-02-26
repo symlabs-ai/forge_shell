@@ -2,7 +2,7 @@
 Protocolo host↔relay — T-27.
 
 Define o schema de mensagens, framing JSON e tratamento de erros
-para comunicação entre o host sym_shell e o relay server.
+para comunicação entre o host forge_shell e o relay server.
 """
 from __future__ import annotations
 

@@ -9,12 +9,12 @@ ENTÃO auditor registra o evento
 import pytest
 from unittest.mock import MagicMock, patch
 from src.application.usecases.terminal_session import TerminalSession
-from src.infrastructure.config.loader import SymShellConfig, NLModeConfig
+from src.infrastructure.config.loader import ForgeShellConfig, NLModeConfig
 
 
 class TestAuditWiredInTerminalSession:
     def _make_session(self):
-        config = SymShellConfig(nl_mode=NLModeConfig(default_active=False))
+        config = ForgeShellConfig(nl_mode=NLModeConfig(default_active=False))
         session = TerminalSession(config=config)
         return session
 

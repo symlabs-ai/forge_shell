@@ -1,4 +1,4 @@
-# TASK LIST — sym_shell · cycle-01 · Fase 1.0 Linux MVP
+# TASK LIST — forge_shell · cycle-01 · Fase 1.0 Linux MVP
 
 > Fonte: PRD v1.0 + decisões do questionário hyper-mode (2026-02-25)
 > Scope: Fase 1.0 Linux apenas.
@@ -22,8 +22,8 @@
 |-------|--------|----------|------|--------|----|
 | T-01  | Estrutura de pacotes: `terminal_engine/`, `event_bus/`, `intelligence/`, `collab/`, `audit/` | P0 | S | done | — |
 | T-02  | Event bus: schema de eventos padronizados (`TerminalOutput`, `UserInput`, `NLRequest`, `AuditEvent`, etc.) | P0 | S | done | — |
-| T-03  | CLI entrypoint: `sym_shell` + subcomandos `share`, `doctor`, `attach` (argparse/click) | P0 | S | done | — |
-| T-04  | Config base: `~/.sym_shell/config.yaml` — schema, carregamento, valores default | P0 | S | done | — |
+| T-03  | CLI entrypoint: `forge_shell` + subcomandos `share`, `doctor`, `attach` (argparse/click) | P0 | S | done | — |
+| T-04  | Config base: `~/.forge_shell/config.yaml` — schema, carregamento, valores default | P0 | S | done | — |
 
 ---
 
@@ -65,15 +65,15 @@
 
 ## Pilar 4 — Colaboração Remota (relay + terminal client)
 
-> Arquitetura: `sym_shell` (host) ↔ **relay intermediário** ↔ `sym_shell` (client terminal)
+> Arquitetura: `forge_shell` (host) ↔ **relay intermediário** ↔ `forge_shell` (client terminal)
 > Cliente é terminal, não browser. Relay tem UI administrativa separada.
 
 | ID    | Tarefa | Priority | Size | Status | US |
 |-------|--------|----------|------|--------|----|
 | T-27  | Protocolo host↔relay: definir mensagens, framing e tratamento de erros | P1 | M | done | US-04 |
 | T-28  | Relay server: recebe stream do host e distribui para clients conectados | P1 | L | done | US-04 |
-| T-29  | Gestão de sessão no host: `sym_shell share` gera token + estado persistente local; relay recupera estado do host | P1 | M | done | US-04 |
-| T-30  | `sym_shell attach <session-id>`: reconectar sessão existente (estado no host, relay informa ao client) | P1 | M | done | US-04 |
+| T-29  | Gestão de sessão no host: `forge_shell share` gera token + estado persistente local; relay recupera estado do host | P1 | M | done | US-04 |
+| T-30  | `forge_shell attach <session-id>`: reconectar sessão existente (estado no host, relay informa ao client) | P1 | M | done | US-04 |
 | T-31  | Client terminal: view-only — recebe e renderiza output do terminal remoto; sem injeção de input | P1 | M | done | US-04 |
 | T-32  | Chat: mensagens simples entre host e participantes via relay | P1 | M | done | US-04 |
 | T-33  | Suggest-only (cards): client propõe comando + explicação; host executa após confirmação explícita | P1 | M | done | US-05 |
@@ -99,7 +99,7 @@
 
 | ID    | Tarefa | Priority | Size | Status | US |
 |-------|--------|----------|------|--------|----|
-| T-42  | `sym_shell doctor`: diagnóstico da engine (PTY, termios, sinais, resize) | P2 | S | done | — |
+| T-42  | `forge_shell doctor`: diagnóstico da engine (PTY, termios, sinais, resize) | P2 | S | done | — |
 | T-43  | Build pipeline PyInstaller: gerar binário standalone Linux | P1 | M | done | — |
 
 ---

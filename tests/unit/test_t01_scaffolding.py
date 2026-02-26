@@ -1,6 +1,6 @@
 """
 T-01 — Scaffolding: estrutura de pacotes
-DADO a estrutura do projeto sym_shell
+DADO a estrutura do projeto forge_shell
 QUANDO importo os pacotes principais
 ENTÃO todos existem e são importáveis sem erro
 """

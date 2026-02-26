@@ -7,7 +7,7 @@
 
 | ID      | Tarefa                                    | Status |
 |---------|-------------------------------------------|--------|
-| C4-T-01 | RelayConfig em SymShellConfig             | ✓      |
+| C4-T-01 | RelayConfig em ForgeShellConfig             | ✓      |
 | C4-T-02 | attach CLI — asyncio.run() viewer loop    | ✓      |
 | C4-T-03 | AuditLogger wired no TerminalSession      | ✓      |
 | C4-T-04 | RelayBridge — ponte sync→async            | ✓      |
@@ -39,7 +39,7 @@
 
 ## Dívidas técnicas (pós-MVP)
 
-- `sym_shell share` não inicia RelayHandler inline ainda — requer orquestração de processo
+- `forge_shell share` não inicia RelayHandler inline ainda — requer orquestração de processo
 - Token de viewer no attach está vazio (`""`) — autenticação real fica pós-MVP
 - RelayBridge só funciona quando relay já está rodando — startup automático fica pós-MVP
 - TLS efetivo (não apenas flag) fica pós-MVP (fase 1.1)

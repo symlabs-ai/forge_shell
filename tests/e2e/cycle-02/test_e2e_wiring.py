@@ -64,7 +64,7 @@ class TestShareWiredE2E:
 class TestPackagingE2E:
     def test_pyproject_has_entry_point(self) -> None:
         content = (ROOT / "pyproject.toml").read_text()
-        assert "sym_shell" in content
+        assert "forge_shell" in content
         assert "main" in content
 
     def test_gitattributes_prevents_crlf_in_sh(self) -> None:

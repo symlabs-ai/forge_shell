@@ -10,11 +10,11 @@ import pytest
 from unittest.mock import MagicMock, patch, call
 
 from src.application.usecases.terminal_session import TerminalSession, SessionMode
-from src.infrastructure.config.loader import SymShellConfig, NLModeConfig, LLMConfig, RedactionConfig
+from src.infrastructure.config.loader import ForgeShellConfig, NLModeConfig, LLMConfig, RedactionConfig
 
 
-def _config(nl_active: bool = True) -> SymShellConfig:
-    return SymShellConfig(
+def _config(nl_active: bool = True) -> ForgeShellConfig:
+    return ForgeShellConfig(
         nl_mode=NLModeConfig(default_active=nl_active),
         redaction=RedactionConfig(),
         llm=LLMConfig(),

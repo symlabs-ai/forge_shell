@@ -9,7 +9,7 @@ fail() { echo -e "${RED}✗ $1${RESET}"; }
 info() { echo -e "${YELLOW}» $1${RESET}"; }
 FAILURES=0
 run_check() { local name="$1"; shift; if "$@"; then pass "${name}"; else fail "${name}"; FAILURES=$((FAILURES+1)); fi; }
-echo ""; echo "╔══════════════════════════════════════════════╗"; echo "║   sym_shell — E2E Gate · cycle-03            ║"; echo "╚══════════════════════════════════════════════╝"; echo ""
+echo ""; echo "╔══════════════════════════════════════════════╗"; echo "║   forge_shell — E2E Gate · cycle-03            ║"; echo "╚══════════════════════════════════════════════╝"; echo ""
 info "1/3  Unit + Integration (regressão)"
 run_check "unit + integration" python -m pytest tests/unit/ tests/integration/ -q --tb=short
 echo ""

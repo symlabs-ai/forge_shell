@@ -1,5 +1,5 @@
 """
-SessionManager — gerencia sessões de colaboração remota do sym_shell.
+SessionManager — gerencia sessões de colaboração remota do forge_shell.
 
 Responsabilidades:
 - Criar sessões identificadas pelo machine code + senha de sessão

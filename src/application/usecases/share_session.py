@@ -1,5 +1,5 @@
 """
-ShareSession — usecase sym_shell share (T-29).
+ShareSession — usecase forge_shell share (T-29).
 
 Cria uma sessão de colaboração e retorna machine_code + password para o host
 compartilhar com o viewer.

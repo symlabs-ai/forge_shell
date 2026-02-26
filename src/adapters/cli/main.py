@@ -1,16 +1,16 @@
 """
-sym_shell — CLI entrypoint.
+forge_shell — CLI entrypoint.
 
 Uso:
-    sym_shell               Inicia sessão local (NL Mode ativo por padrão)
-    sym_shell share         Inicia sessão compartilhada via relay e exibe token
-    sym_shell doctor        Diagnóstico do terminal engine
-    sym_shell attach <id>   Reconecta a uma sessão existente pelo session-id
-    sym_shell --passthrough Liga PTY puro sem NL Mode, collab ou auditoria.
+    forge_shell               Inicia sessão local (NL Mode ativo por padrão)
+    forge_shell share         Inicia sessão compartilhada via relay e exibe token
+    forge_shell doctor        Diagnóstico do terminal engine
+    forge_shell attach <id>   Reconecta a uma sessão existente pelo session-id
+    forge_shell --passthrough Liga PTY puro sem NL Mode, collab ou auditoria.
                             Útil para diagnosticar se um bug é da engine PTY ou
                             das camadas superiores. Comportamento idêntico a um
                             terminal Bash puro — nenhuma funcionalidade do
-                            sym_shell é ativada neste modo.
+                            forge_shell é ativada neste modo.
 """
 import argparse
 import asyncio
@@ -46,9 +46,9 @@ from src.infrastructure.intelligence.redaction import Redactor
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="sym_shell",
+        prog="forge_shell",
         description=(
-            "sym_shell — terminal Bash nativo com NL Mode, colaboração remota e auditoria.\n"
+            "forge_shell — terminal Bash nativo com NL Mode, colaboração remota e auditoria.\n"
             "NL Mode está ativo por padrão. Use ! para alternar para Bash direto."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -59,8 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Liga o PTY puro (Bash nativo) desativando completamente NL Mode, "
             "colaboração e auditoria. Use para diagnosticar se um bug é da engine "
-            "PTY ou de camadas superiores do sym_shell. Comportamento idêntico ao "
-            "Bash padrão — nenhuma feature do sym_shell é ativada."
+            "PTY ou de camadas superiores do forge_shell. Comportamento idêntico ao "
+            "Bash padrão — nenhuma feature do forge_shell é ativada."
         ),
     )
 
@@ -71,9 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
         "share",
         help="Iniciar sessão compartilhada via relay e exibir código + senha",
         description=(
-            "Inicia o sym_shell em modo compartilhado. Exibe o código da máquina "
+            "Inicia o forge_shell em modo compartilhado. Exibe o código da máquina "
             "(persistente) e a senha de sessão (efêmera) para o viewer conectar. "
-            "Viewer usa: sym_shell attach <código> <senha>."
+            "Viewer usa: forge_shell attach <código> <senha>."
         ),
     )
     share_parser.add_argument(
@@ -96,10 +96,10 @@ def build_parser() -> argparse.ArgumentParser:
     # attach
     attach_parser = subparsers.add_parser(
         "attach",
-        help="Conectar como viewer a uma sessão sym_shell em andamento",
+        help="Conectar como viewer a uma sessão forge_shell em andamento",
         description=(
-            "Conecta ao terminal remoto de uma sessão sym_shell ativa. "
-            "Use o código da máquina e a senha exibidos pelo 'sym_shell share' no host."
+            "Conecta ao terminal remoto de uma sessão forge_shell ativa. "
+            "Use o código da máquina e a senha exibidos pelo 'forge_shell share' no host."
         ),
     )
     attach_parser.add_argument(
@@ -110,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
     attach_parser.add_argument(
         "password",
         metavar="SENHA",
-        help="Senha de sessão (6 dígitos, exibida pelo 'sym_shell share')",
+        help="Senha de sessão (6 dígitos, exibida pelo 'forge_shell share')",
     )
 
     # relay
@@ -119,8 +119,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Iniciar servidor relay standalone (deploy em servidor público)",
         description=(
             "Inicia o RelayHandler como serviço standalone. "
-            "Faça deploy em um servidor com IP público para que 'sym_shell share' "
-            "e 'sym_shell attach' conectem sem precisar de NAT ou porta aberta no host. "
+            "Faça deploy em um servidor com IP público para que 'forge_shell share' "
+            "e 'forge_shell attach' conectem sem precisar de NAT ou porta aberta no host. "
             "Configure relay.url no config.yaml para apontar para este servidor."
         ),
     )
@@ -139,7 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
     # config
     config_parser = subparsers.add_parser(
         "config",
-        help="Exibir ou editar a configuração do sym_shell",
+        help="Exibir ou editar a configuração do forge_shell",
         description=(
             "Sem subcomando: exibe a configuração atual (merged defaults + arquivo). "
             "Use 'config edit' para abrir o arquivo de configuração no $EDITOR."
@@ -181,7 +181,7 @@ def _config_show() -> int:
     """Exibe a configuração atual como YAML."""
     config = ConfigLoader().load()
     cfg_path = ConfigLoader()._path
-    print(f"# sym_shell config — {cfg_path}")
+    print(f"# forge_shell config — {cfg_path}")
     print(f"# (defaults mesclados com arquivo existente)\n")
     print(f"nl_mode:")
     print(f"  default_active: {str(config.nl_mode.default_active).lower()}")
@@ -216,9 +216,9 @@ def _config_edit() -> int:
         example = cfg_path.parent / "config.yaml.example"
         if example.exists():
             cfg_path.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
-            print(f"[sym_shell] Criado {cfg_path} a partir do exemplo.")
+            print(f"[forge_shell] Criado {cfg_path} a partir do exemplo.")
         else:
-            cfg_path.write_text("# sym_shell config\n", encoding="utf-8")
+            cfg_path.write_text("# forge_shell config\n", encoding="utf-8")
     editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "nano"
     result = subprocess.run([editor, str(cfg_path)])
     return result.returncode
@@ -249,8 +249,8 @@ def main(argv: list[str] | None = None) -> int:
             getattr(config.relay, "key_file", None),
         )
         relay = RelayHandler(host=bind_host, port=port, ssl_context=ssl_ctx)
-        print(f"[sym_shell relay] Escutando em ws://{bind_host}:{port}")
-        print(f"[sym_shell relay] Ctrl+C para encerrar")
+        print(f"[forge_shell relay] Escutando em ws://{bind_host}:{port}")
+        print(f"[forge_shell relay] Ctrl+C para encerrar")
         try:
             asyncio.run(relay.start())
         except KeyboardInterrupt:
@@ -262,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         from src.infrastructure.collab import machine_id as _machine_id
         if getattr(args, "regen", False):
             machine_code = _machine_id.regenerate()
-            print(f"[sym_shell] Código da máquina regerado.")
+            print(f"[forge_shell] Código da máquina regerado.")
         else:
             machine_code = _machine_id.load_or_create()
         sm = SessionManager()
@@ -272,13 +272,13 @@ def main(argv: list[str] | None = None) -> int:
 
         relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
 
-        print(f"[sym_shell] Sessão compartilhada iniciada")
+        print(f"[forge_shell] Sessão compartilhada iniciada")
         print(f"  Código da máquina : {result['machine_code']}")
         print(f"  Senha de sessão   : {result['password']}")
         print(f"  Relay URL         : {relay_url}")
 
         # RelayBridge conecta o TerminalSession ao relay externo
-        # Use 'sym_shell relay' para subir o servidor relay separadamente
+        # Use 'forge_shell relay' para subir o servidor relay separadamente
         ssl_client_ctx = _build_ssl_client_context(config.relay.tls)
         bridge = RelayBridge(
             relay_url=relay_url,
@@ -311,8 +311,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "attach":
         config = ConfigLoader().load()
         relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
-        print(f"[sym_shell] Conectando à máquina: {args.machine_code}")
-        print(f"[sym_shell] Use Ctrl+C para encerrar a visualização")
+        print(f"[forge_shell] Conectando à máquina: {args.machine_code}")
+        print(f"[forge_shell] Use Ctrl+C para encerrar a visualização")
         ssl_ctx = _build_ssl_client_context(config.relay.tls)
         viewer = ViewerClient(
             relay_url=relay_url,

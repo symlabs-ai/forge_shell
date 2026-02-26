@@ -1,7 +1,7 @@
 """
 ViewerClient — C3-T-03.
 
-Cliente WebSocket do viewer (sym_shell attach). Conecta ao relay como viewer,
+Cliente WebSocket do viewer (forge_shell attach). Conecta ao relay como viewer,
 recebe terminal output e chama callback on_output com os bytes decodificados.
 """
 from __future__ import annotations

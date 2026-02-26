@@ -1,7 +1,7 @@
 """
 Smoke tests PTY — regressões de I/O interativo.
 
-Verificam comportamento real do sym_shell num PTY via pexpect.
+Verificam comportamento real do forge_shell num PTY via pexpect.
 Requer: pip install pexpect
 
 Cenários cobertos:
@@ -34,7 +34,7 @@ TIMEOUT = 10
 
 
 def _spawn(args: list[str] | None = None) -> "pexpect.spawn":
-    """Spawna sym_shell num PTY real via pexpect."""
+    """Spawna forge_shell num PTY real via pexpect."""
     argv = ["-m", "src.adapters.cli.main"] + (args or [])
     return pexpect.spawn(
         sys.executable, argv,
@@ -52,7 +52,7 @@ class TestStartup:
     def test_startup_hint_appears(self):
         child = _spawn()
         try:
-            child.expect("sym_shell", timeout=5)
+            child.expect("forge_shell", timeout=5)
         finally:
             child.close(force=True)
 

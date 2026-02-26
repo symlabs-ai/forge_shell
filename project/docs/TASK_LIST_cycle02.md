@@ -1,4 +1,4 @@
-# TASK LIST — sym_shell · cycle-02 · Wiring & I/O Loop
+# TASK LIST — forge_shell · cycle-02 · Wiring & I/O Loop
 
 > Fonte: retro cycle-01 + gap analysis das stubs em main.py
 > Objetivo: transformar blocos isolados em produto funcional (executável real)
@@ -19,7 +19,7 @@
 
 | ID      | Tarefa | Priority | Size | Status |
 |---------|--------|----------|------|--------|
-| C2-T-01 | `pyproject.toml` — manifest, `version = "0.1.0"`, entry_point `sym_shell`, dependências | P0 | XS | done |
+| C2-T-01 | `pyproject.toml` — manifest, `version = "0.1.0"`, entry_point `forge_shell`, dependências | P0 | XS | done |
 | C2-T-02 | `.gitattributes` — `text=auto`, `*.sh text eol=lf`, `*.py text eol=lf` | P0 | XS | done |
 
 ---
@@ -85,8 +85,8 @@ C2-T-08                        share wired
 
 ## Critério de done (cycle-02)
 
-- `pip install -e .` instala o pacote e `sym_shell --help` funciona
-- `sym_shell --passthrough` abre Bash real e passa input/output sem corrupção
-- `sym_shell doctor` imprime relatório com checks OK/WARN/FAIL
-- `sym_shell` (sem flags) inicia com hint NL Mode e responde a `!` + `!<cmd>`
+- `pip install -e .` instala o pacote e `forge_shell --help` funciona
+- `forge_shell --passthrough` abre Bash real e passa input/output sem corrupção
+- `forge_shell doctor` imprime relatório com checks OK/WARN/FAIL
+- `forge_shell` (sem flags) inicia com hint NL Mode e responde a `!` + `!<cmd>`
 - E2E Gate cycle-02 passando (run-all.sh)

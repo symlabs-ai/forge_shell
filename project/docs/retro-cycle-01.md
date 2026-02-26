@@ -24,11 +24,11 @@
 ## Foco do próximo ciclo
 
 - **cycle-02**: Integração real com ForgeLLM (provider ollama local) + I/O loop completo (stdin→pty→stdout em sessão interativa)
-- **pyproject.toml**: criar manifesto com versão `0.1.0`, dependências e entry point `sym_shell`
+- **pyproject.toml**: criar manifesto com versão `0.1.0`, dependências e entry point `forge_shell`
 - **`.gitattributes`**: definir `text=auto` para evitar CRLF em scripts shell
 - **Relay WebSocket real**: T-28 tem a lógica mas falta o handler asyncio/websockets que conecta host↔relay via rede
 - **NL Mode interativo**: integrar NLModeEngine com o I/O loop real (interceptar input antes de enviar ao PTY)
-- **Config smoke**: validar carregamento real de `~/.sym_shell/config.yaml` com perfis dev/prod
+- **Config smoke**: validar carregamento real de `~/.forge_shell/config.yaml` com perfis dev/prod
 
 ## Métricas
 

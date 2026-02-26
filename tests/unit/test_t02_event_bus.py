@@ -1,6 +1,6 @@
 """
 T-02 — Event bus: schema de eventos padronizados
-DADO o sistema de eventos do sym_shell
+DADO o sistema de eventos do forge_shell
 QUANDO crio cada tipo de evento com os campos obrigatórios
 ENTÃO o evento é criado corretamente e tem os atributos esperados
 """

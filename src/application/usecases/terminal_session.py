@@ -1,7 +1,7 @@
 """
 TerminalSession — C2-T-03 + C2-T-09.
 
-Loop principal do sym_shell: une PTYEngine, NLInterceptor, AlternateScreenDetector
+Loop principal do forge_shell: une PTYEngine, NLInterceptor, AlternateScreenDetector
 e AuditLogger em uma sessão interativa completa.
 
 Modos:
@@ -23,16 +23,16 @@ import time
 from collections import deque
 from enum import Enum
 
-# Log de timing para diagnóstico — escreve em /tmp/sym_shell_timing.log
+# Log de timing para diagnóstico — escreve em /tmp/forge_shell_timing.log
 import logging
-_tlog = logging.getLogger("sym_shell.timing")
+_tlog = logging.getLogger("forge_shell.timing")
 _tlog.setLevel(logging.DEBUG)
 _tlog.propagate = False  # não vaza para o root logger (evita eco no PTY)
-_th = logging.FileHandler("/tmp/sym_shell_timing.log", mode="w")
+_th = logging.FileHandler("/tmp/forge_shell_timing.log", mode="w")
 _th.setFormatter(logging.Formatter("%(asctime)s.%(msecs)03d  %(message)s", datefmt="%H:%M:%S"))
 _tlog.addHandler(_th)
 
-from src.infrastructure.config.loader import SymShellConfig
+from src.infrastructure.config.loader import ForgeShellConfig
 from src.infrastructure.terminal_engine.pty_engine import PTYEngine
 from src.infrastructure.terminal_engine.alternate_screen import AlternateScreenDetector
 from src.application.usecases.nl_interceptor import InterceptAction
@@ -46,16 +46,16 @@ class SessionMode(str, Enum):
 
 class TerminalSession:
     """
-    Sessão interativa do sym_shell.
+    Sessão interativa do forge_shell.
 
     Parâmetros:
-        config: configuração carregada do ~/.sym_shell/config.yaml
+        config: configuração carregada do ~/.forge_shell/config.yaml
         passthrough: se True, liga PTY puro sem NL/collab/audit
     """
 
     def __init__(
         self,
-        config: SymShellConfig,
+        config: ForgeShellConfig,
         passthrough: bool = False,
     ) -> None:
         self.config = config
@@ -148,7 +148,7 @@ class TerminalSession:
                 except queue.Empty:
                     pass
                 if out:
-                    out.write(b']\033[0m\r\n\033[33m[sym_shell: cancelado]\033[0m\r\n')
+                    out.write(b']\033[0m\r\n\033[33m[forge_shell: cancelado]\033[0m\r\n')
                     out.flush()
             else:
                 self._nl_buffer = b""
@@ -195,7 +195,7 @@ class TerminalSession:
                     if self._interceptor is not None:
                         self._interceptor.set_context(self._build_context())
                     if out:
-                        out.write(b'\033[36m[sym_shell: pensando')
+                        out.write(b'\033[36m[forge_shell: pensando')
                         out.flush()
                     interceptor = self._interceptor
                     llm_q = self._llm_queue
@@ -262,7 +262,7 @@ class TerminalSession:
             else:
                 self._mode = SessionMode.NL
                 label = b"NL Mode ativo"
-            indicator = b"\r\n\033[33m[sym_shell: " + label + b"]\033[0m\r\n"
+            indicator = b"\r\n\033[33m[forge_shell: " + label + b"]\033[0m\r\n"
             if out:
                 out.write(indicator)
                 out.flush()
@@ -275,7 +275,7 @@ class TerminalSession:
         if result.action == InterceptAction.HELP:
             lines = [
                 b"\r\n",
-                b"\033[1;36msym_shell\033[0m \xe2\x80\x94 comandos dispon\xc3\xadveis\r\n",
+                b"\033[1;36mforge_shell\033[0m \xe2\x80\x94 comandos dispon\xc3\xadveis\r\n",
                 b"\r\n",
                 b"  \033[33m!\033[0m              alternar NL Mode \xe2\x86\x94 Bash Mode\r\n",
                 b"  \033[33m!<cmd>\033[0m         executar bash direto (ex: \033[2m!ls -la\033[0m)\r\n",
@@ -283,7 +283,7 @@ class TerminalSession:
                 b"  \033[33m:risk <cmd>\033[0m    classificar risco de um comando\r\n",
                 b"  \033[33m:help\033[0m          exibir esta ajuda\r\n",
                 b"\r\n",
-                b"  \033[2mNL Mode:\033[0m descreva em portugu\xc3\xaas \xe2\x86\x92 sym_shell gera o comando\r\n",
+                b"  \033[2mNL Mode:\033[0m descreva em portugu\xc3\xaas \xe2\x86\x92 forge_shell gera o comando\r\n",
                 b"  \033[2mCtrl-C:\033[0m cancela consulta LLM em andamento\r\n",
                 b"\r\n",
             ]
@@ -412,7 +412,7 @@ class TerminalSession:
         if out is None:
             return
         hint = (
-            b"\033[36msym_shell\033[0m"
+            b"\033[36mforge_shell\033[0m"
             b"  |  \033[1mNL Mode\033[0m"
             b"  |  \033[33m!\033[0m para bash"
             b"  |  \033[33m!<cmd>\033[0m bash direto"

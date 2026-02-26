@@ -1,12 +1,15 @@
 """
-T-03 — CLI entrypoint: sym_shell + subcomandos
-DADO o CLI do sym_shell
+T-03 — CLI entrypoint: forge_shell + subcomandos
+DADO o CLI do forge_shell
 QUANDO executo com --help ou com subcomandos inválidos
 ENTÃO o CLI responde corretamente com exit codes e mensagens esperadas
 """
 import subprocess
 import sys
+from pathlib import Path
 import pytest
+
+_PROJECT_ROOT = str(Path(__file__).parent.parent.parent)
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess:
@@ -14,7 +17,7 @@ def run_cli(*args: str) -> subprocess.CompletedProcess:
         [sys.executable, "-m", "src.adapters.cli.main", *args],
         capture_output=True,
         text=True,
-        cwd="/home/palhano/dev/research/sym_shell",
+        cwd=_PROJECT_ROOT,
     )
 
 

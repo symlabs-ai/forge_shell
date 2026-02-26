@@ -1,4 +1,4 @@
-# TASK LIST — sym_shell · cycle-04 · Wiring Final + MVP Completo
+# TASK LIST — forge_shell · cycle-04 · Wiring Final + MVP Completo
 
 > Fonte: retro cycle-03 + gap analysis (attach, relay_url, AuditLogger, share streaming)
 > Objetivo: fechar todos os gaps de wiring; MVP funcional end-to-end
@@ -19,7 +19,7 @@
 
 | ID      | Tarefa | Priority | Size | Status |
 |---------|--------|----------|------|--------|
-| C4-T-01 | `RelayConfig` em `SymShellConfig` — relay.url, relay.port com defaults; loader atualizado | P0 | S | pending |
+| C4-T-01 | `RelayConfig` em `ForgeShellConfig` — relay.url, relay.port com defaults; loader atualizado | P0 | S | pending |
 
 ---
 
@@ -79,8 +79,8 @@ C4-T-05         share wired (share + bridge + session)
 
 ## Critério de done (cycle-04 / MVP)
 
-- `sym_shell attach <id>` conecta ao relay e renderiza output no terminal
+- `forge_shell attach <id>` conecta ao relay e renderiza output no terminal
 - relay_url lido de config.yaml (não hardcoded)
-- AuditLogger registra eventos em `~/.sym_shell/audit.log`
-- `sym_shell share` inicia relay inline + streaming PTY→viewers
+- AuditLogger registra eventos em `~/.forge_shell/audit.log`
+- `forge_shell share` inicia relay inline + streaming PTY→viewers
 - E2E Gate cycle-04 passando

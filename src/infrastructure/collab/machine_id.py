@@ -1,19 +1,19 @@
 """
-machine_id — Código de máquina persistente para relay do sym_shell.
+machine_id — Código de máquina persistente para relay do forge_shell.
 
 Formato : NNN-NNN-NNN  (ex: 497-051-961)
-Arquivo : ~/.sym_shell/machine_id
+Arquivo : ~/.forge_shell/machine_id
 
 O código é gerado uma vez e reutilizado em todas as sessões.
 Só é regerado quando regenerate() é chamado explicitamente
-(ex: sym_shell share --regen).
+(ex: forge_shell share --regen).
 """
 from __future__ import annotations
 
 import random
 from pathlib import Path
 
-_DEFAULT_PATH = Path.home() / ".sym_shell" / "machine_id"
+_DEFAULT_PATH = Path.home() / ".forge_shell" / "machine_id"
 
 
 def _generate() -> str:

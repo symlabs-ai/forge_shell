@@ -3,7 +3,7 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sym-shell"
+name = "forge-shell"
 version = "0.3.3"
 description = "Terminal Bash nativo com NL Mode, colaboração remota e auditoria"
 requires-python = ">=3.11"
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-sym_shell = "src.adapters.cli.main:main"
+forge_shell = "src.adapters.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

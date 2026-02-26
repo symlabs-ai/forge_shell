@@ -1,7 +1,7 @@
 """
-Testes — sym_shell config subcommand (Feature 5)
-DADO o CLI sym_shell
-QUANDO o usuário chama `sym_shell config` ou `sym_shell config show/edit`
+Testes — forge_shell config subcommand (Feature 5)
+DADO o CLI forge_shell
+QUANDO o usuário chama `forge_shell config` ou `forge_shell config show/edit`
 ENTÃO exibe configuração YAML ou abre editor
 """
 import subprocess

@@ -42,7 +42,7 @@ class TestInstallSmoke:
         for p in packages:
             assert p.exists(), f"Missing {p}"
 
-    def test_sym_shell_module_runs_help(self) -> None:
+    def test_forge_shell_module_runs_help(self) -> None:
         result = subprocess.run(
             [PYTHON, "-m", "src.adapters.cli.main", "--help"],
             capture_output=True, text=True, timeout=10,

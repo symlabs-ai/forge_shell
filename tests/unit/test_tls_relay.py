@@ -11,7 +11,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from src.infrastructure.config.loader import RelayConfig, ConfigLoader, SymShellConfig
+from src.infrastructure.config.loader import RelayConfig, ConfigLoader, ForgeShellConfig
 from src.infrastructure.collab.relay_handler import RelayHandler
 from src.infrastructure.collab.host_relay_client import HostRelayClient
 from src.infrastructure.collab.viewer_client import ViewerClient
@@ -34,12 +34,12 @@ class TestRelayConfig:
         assert cfg.key_file is None
 
     def test_relay_config_cert_file_set(self) -> None:
-        cfg = RelayConfig(cert_file="/etc/sym_shell/server.crt")
-        assert cfg.cert_file == "/etc/sym_shell/server.crt"
+        cfg = RelayConfig(cert_file="/etc/forge_shell/server.crt")
+        assert cfg.cert_file == "/etc/forge_shell/server.crt"
 
     def test_relay_config_key_file_set(self) -> None:
-        cfg = RelayConfig(key_file="/etc/sym_shell/server.key")
-        assert cfg.key_file == "/etc/sym_shell/server.key"
+        cfg = RelayConfig(key_file="/etc/forge_shell/server.key")
+        assert cfg.key_file == "/etc/forge_shell/server.key"
 
     def test_config_loader_parses_cert_file(self, tmp_path) -> None:
         cfg_yaml = tmp_path / "config.yaml"

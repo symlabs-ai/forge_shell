@@ -73,9 +73,9 @@ class TestNLInterceptorHelp:
 
 class TestTerminalSessionHelpHandler:
     def _make_session(self):
-        from src.infrastructure.config.loader import SymShellConfig
+        from src.infrastructure.config.loader import ForgeShellConfig
         from src.application.usecases.terminal_session import TerminalSession
-        config = SymShellConfig()
+        config = ForgeShellConfig()
         session = TerminalSession(config=config)
         return session
 
@@ -88,7 +88,7 @@ class TestTerminalSessionHelpHandler:
         result = InterceptResult(action=InterceptAction.HELP)
         session._handle_intercept_result(result)
         output = buf.getvalue()
-        assert b"sym_shell" in output
+        assert b"forge_shell" in output
         assert b":explain" in output
         assert b":help" in output
         assert b"!" in output

@@ -1,6 +1,6 @@
 """
 Testes — Viewer password auth
-DADO sym_shell attach com machine_code + password
+DADO forge_shell attach com machine_code + password
 QUANDO o viewer envia password correta/errada ao relay
 ENTÃO acesso é permitido ou negado
 """

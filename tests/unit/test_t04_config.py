@@ -1,6 +1,6 @@
 """
-T-04 — Config base: ~/.sym_shell/config.yaml
-DADO o sistema de configuração do sym_shell
+T-04 — Config base: ~/.forge_shell/config.yaml
+DADO o sistema de configuração do forge_shell
 QUANDO carrego config de arquivo YAML ou sem arquivo
 ENTÃO os valores corretos são retornados e o schema é validado
 """
@@ -9,14 +9,14 @@ from pathlib import Path
 import tempfile
 import yaml
 
-from src.infrastructure.config.loader import ConfigLoader, SymShellConfig
+from src.infrastructure.config.loader import ConfigLoader, ForgeShellConfig
 
 
 class TestConfigDefaults:
     def test_loads_defaults_without_file(self) -> None:
         loader = ConfigLoader(config_path=Path("/nonexistent/config.yaml"))
         config = loader.load()
-        assert isinstance(config, SymShellConfig)
+        assert isinstance(config, ForgeShellConfig)
 
     def test_default_nl_mode_is_active(self) -> None:
         loader = ConfigLoader(config_path=Path("/nonexistent/config.yaml"))

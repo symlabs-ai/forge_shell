@@ -1,12 +1,12 @@
-# Database / Schema Diagram — sym_shell
+# Database / Schema Diagram — forge_shell
 
-O sym_shell não usa banco de dados SQL. Este diagrama representa as estruturas de dados persistentes e em memória: configuração em YAML, registros de auditoria e estado de sessão colaborativa.
+O forge_shell não usa banco de dados SQL. Este diagrama representa as estruturas de dados persistentes e em memória: configuração em YAML, registros de auditoria e estado de sessão colaborativa.
 
 ```mermaid
 erDiagram
 
-    %% ── Config schema (~/.sym_shell/config.yaml) ─────────────
-    SymShellConfig {
+    %% ── Config schema (~/.forge_shell/config.yaml) ─────────────
+    ForgeShellConfig {
         NLModeConfig    nl_mode
         RedactionConfig redaction
         LLMConfig       llm
@@ -98,10 +98,10 @@ erDiagram
     }
 
     %% ── Relationships ─────────────────────────────────────────
-    SymShellConfig ||--|| NLModeConfig       : contains
-    SymShellConfig ||--|| LLMConfig          : contains
-    SymShellConfig ||--|| RelayConfig        : contains
-    SymShellConfig ||--|| RedactionConfig    : contains
+    ForgeShellConfig ||--|| NLModeConfig       : contains
+    ForgeShellConfig ||--|| LLMConfig          : contains
+    ForgeShellConfig ||--|| RelayConfig        : contains
+    ForgeShellConfig ||--|| RedactionConfig    : contains
     RedactionConfig ||--|{ RedactionProfileConfig : "has profiles"
 
     Session ||--|{ Participant : "has participants"

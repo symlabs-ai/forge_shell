@@ -100,7 +100,7 @@ class TestRelayServer:
 
 
 class TestShareSession:
-    """T-29 — usecase sym_shell share."""
+    """T-29 — usecase forge_shell share."""
 
     def test_share_returns_session_info(self) -> None:
         sm = MagicMock()

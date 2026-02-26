@@ -12,11 +12,11 @@ from unittest.mock import MagicMock
 from src.application.usecases.terminal_session import TerminalSession
 from src.application.usecases.nl_interceptor import InterceptResult, InterceptAction
 from src.infrastructure.intelligence.nl_response import NLResponse, RiskLevel
-from src.infrastructure.config.loader import SymShellConfig
+from src.infrastructure.config.loader import ForgeShellConfig
 
 
 def _make_session():
-    session = TerminalSession(config=SymShellConfig())
+    session = TerminalSession(config=ForgeShellConfig())
     session._engine = MagicMock()
     session._stdout = MagicMock()
     session._detector = MagicMock()

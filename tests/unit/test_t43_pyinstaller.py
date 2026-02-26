@@ -1,6 +1,6 @@
 """
 T-43 — Build pipeline PyInstaller
-DADO o arquivo sym_shell.spec e o script de build
+DADO o arquivo forge_shell.spec e o script de build
 QUANDO valido a configuração
 ENTÃO o spec existe com entrypoint correto e o script de build existe
 """
@@ -13,21 +13,21 @@ REPO_ROOT = Path(__file__).parent.parent.parent
 
 class TestPyInstallerConfig:
     def test_spec_file_exists(self) -> None:
-        spec = REPO_ROOT / "sym_shell.spec"
-        assert spec.exists(), f"sym_shell.spec não encontrado em {REPO_ROOT}"
+        spec = REPO_ROOT / "forge_shell.spec"
+        assert spec.exists(), f"forge_shell.spec não encontrado em {REPO_ROOT}"
 
     def test_spec_references_main_entrypoint(self) -> None:
-        spec = REPO_ROOT / "sym_shell.spec"
+        spec = REPO_ROOT / "forge_shell.spec"
         content = spec.read_text()
         assert "main.py" in content or "main" in content
 
     def test_spec_sets_binary_name(self) -> None:
-        spec = REPO_ROOT / "sym_shell.spec"
+        spec = REPO_ROOT / "forge_shell.spec"
         content = spec.read_text()
-        assert "sym_shell" in content
+        assert "forge_shell" in content
 
     def test_spec_onefile_mode(self) -> None:
-        spec = REPO_ROOT / "sym_shell.spec"
+        spec = REPO_ROOT / "forge_shell.spec"
         content = spec.read_text()
         assert "EXE" in content
 

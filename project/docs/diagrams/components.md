@@ -1,4 +1,4 @@
-# Components Diagram — sym_shell
+# Components Diagram — forge_shell
 
 Componentes do sistema e como eles se conectam, refletindo a estrutura de pacotes em `src/`.
 
@@ -52,8 +52,8 @@ flowchart TD
     end
 
     subgraph INFRA_CFG["infrastructure/config"]
-        CL["ConfigLoader\n(~/.sym_shell/config.yaml)"]
-        CFG["SymShellConfig\n(NLModeConfig · LLMConfig\nRelayConfig · RedactionConfig)"]
+        CL["ConfigLoader\n(~/.forge_shell/config.yaml)"]
+        CFG["ForgeShellConfig\n(NLModeConfig · LLMConfig\nRelayConfig · RedactionConfig)"]
     end
 
     %% ── CLI wiring ──────────────────────────────────────────

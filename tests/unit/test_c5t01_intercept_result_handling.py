@@ -14,11 +14,11 @@ import pytest
 from unittest.mock import MagicMock, patch
 from src.application.usecases.terminal_session import TerminalSession
 from src.application.usecases.nl_interceptor import InterceptResult, InterceptAction
-from src.infrastructure.config.loader import SymShellConfig, NLModeConfig
+from src.infrastructure.config.loader import ForgeShellConfig, NLModeConfig
 
 
 def _make_session():
-    config = SymShellConfig(nl_mode=NLModeConfig(default_active=True))
+    config = ForgeShellConfig(nl_mode=NLModeConfig(default_active=True))
     session = TerminalSession(config=config)
     session._engine = MagicMock()
     session._engine.write = MagicMock()

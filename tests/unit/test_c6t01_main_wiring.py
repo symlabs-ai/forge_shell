@@ -1,6 +1,6 @@
 """
 C6-T-01 — main.py wire NLInterceptor + AuditLogger + startup_hint
-DADO sym_shell sem subcomando (modo padrão)
+DADO forge_shell sem subcomando (modo padrão)
 QUANDO main() é chamado
 ENTÃO TerminalSession._interceptor é injetado com NLInterceptor real
 ENTÃO TerminalSession._auditor é injetado com AuditLogger

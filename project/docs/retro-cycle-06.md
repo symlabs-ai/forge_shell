@@ -30,7 +30,7 @@
 - Regressão: cycle-02 E2E tests esperavam `share` retornar rápido → marcados como `xfail`
 
 ### C6-T-05 — `config.yaml.example` na primeira execução
-- `ConfigLoader.ensure_config_dir()`: cria `~/.sym_shell/` + `config.yaml.example` (best-effort)
+- `ConfigLoader.ensure_config_dir()`: cria `~/.forge_shell/` + `config.yaml.example` (best-effort)
 - `load()` chama `ensure_config_dir()` em toda execução
 - Try/except OSError/PermissionError para ambientes restritos
 
@@ -67,7 +67,7 @@
 
 - **`share` como long-running session**: alinhado com UX correto — host mantém PTY aberto enquanto viewer está conectado
 - **Double-confirm sem blocking I/O**: para HIGH risk, apenas exibir aviso e não injetar; usuário digita manualmente
-- **`ensure_config_dir` best-effort**: test environments e ambientes restritos não devem quebrar por falta de `~/.sym_shell/`
+- **`ensure_config_dir` best-effort**: test environments e ambientes restritos não devem quebrar por falta de `~/.forge_shell/`
 
 ---
 
@@ -75,13 +75,13 @@
 
 Todos os 6 ciclos encerrados. O MVP está **100% wired**:
 
-- `sym_shell` (entry point via pip install -e .) ✓
+- `forge_shell` (entry point via pip install -e .) ✓
 - NL Mode ativo por padrão com Ollama llama3.2 ✓
 - Double-confirm para HIGH risk ✓
 - Toggle NL↔BASH com indicador correto ✓
 - `share` com RelayHandler + RelayBridge + PTY streaming ✓
 - `attach` com asyncio ViewerClient ✓
 - AuditLogger wired em todas as sessões ✓
-- `~/.sym_shell/config.yaml.example` criado na primeira execução ✓
+- `~/.forge_shell/config.yaml.example` criado na primeira execução ✓
 
 **Próximo passo:** `release_v0.2.0`

@@ -1,4 +1,4 @@
-# SPEC.md — sym_shell
+# SPEC.md — forge_shell
 
 > Versão: 0.3.3
 > MVP entregue em: 2026-02-25
@@ -45,23 +45,23 @@ Terminal Bash nativo com linguagem natural integrada, colaboração remota e aud
 | HostRelayClient — WS client role=host + send_output | US-04 | Entregue | cycle-03 |
 | RelayBridge — bridge sync→async via queue.Queue + thread daemon | US-04 | Entregue | cycle-04 |
 | ViewerClient — WS client role=viewer + receive loop + wait() | US-04 | Entregue | cycle-03 |
-| `sym_shell share` — inicia RelayHandler + RelayBridge + PTY streaming | US-04 | Entregue | cycle-06 |
-| `sym_shell attach <id>` — asyncio viewer loop com Ctrl+C graceful | US-04 | Entregue | cycle-04 |
+| `forge_shell share` — inicia RelayHandler + RelayBridge + PTY streaming | US-04 | Entregue | cycle-06 |
+| `forge_shell attach <id>` — asyncio viewer loop com Ctrl+C graceful | US-04 | Entregue | cycle-04 |
 | SessionIndicator — banner "Sessão compartilhada: ATIVA" | US-04 | Entregue | cycle-01 |
 | AuditLogger — registra commands, approvals, join/leave em memória | US-06 | Entregue | cycle-01 |
 | Export auditoria JSON estruturado e texto plano | US-06 | Entregue | cycle-01 |
 | AuditLogger wired em todas as sessões | US-06 | Entregue | cycle-04 |
-| `sym_shell doctor` — diagnóstico PTY, termios, resize, signals | — | Entregue | cycle-01 |
+| `forge_shell doctor` — diagnóstico PTY, termios, resize, signals | — | Entregue | cycle-01 |
 | `--passthrough` — PTY puro sem NL/collab/audit (debug mode) | — | Entregue | cycle-01 |
-| ConfigLoader — `~/.sym_shell/config.yaml` + defaults + `config.yaml.example` | — | Entregue | cycle-06 |
+| ConfigLoader — `~/.forge_shell/config.yaml` + defaults + `config.yaml.example` | — | Entregue | cycle-06 |
 | Event bus — schema de eventos padronizados (TerminalOutputEvent, etc.) | — | Entregue | cycle-01 |
 | Relay protocol — RelayMessage framing JSON (encode/decode) | US-04 | Entregue | cycle-01 |
-| `pip install -e .` via pyproject.toml + entry point `sym_shell` | — | Entregue | cycle-02 |
+| `pip install -e .` via pyproject.toml + entry point `forge_shell` | — | Entregue | cycle-02 |
 | SuggestCard — estrutura de card suggest-only (infra) | US-05 | Entregue | cycle-01 |
-| `sym_shell config [show\|edit]` — exibe/edita config YAML sem abrir arquivo | — | Entregue | /feature |
-| `sym_shell attach --token` — token auth no viewer (RelayHandler valida) | US-04 | Entregue | /feature |
+| `forge_shell config [show\|edit]` — exibe/edita config YAML sem abrir arquivo | — | Entregue | /feature |
+| `forge_shell attach --token` — token auth no viewer (RelayHandler valida) | US-04 | Entregue | /feature |
 | TLS no relay — ssl_context em RelayHandler + auto wss:// + cert_file/key_file | US-04 | Entregue | /feature |
-| Build distribuível — sym_shell.spec PyInstaller + scripts/build.sh + pipx | — | Entregue | /feature |
+| Build distribuível — forge_shell.spec PyInstaller + scripts/build.sh + pipx | — | Entregue | /feature |
 
 ### O que está fora do escopo
 
@@ -70,7 +70,7 @@ Terminal Bash nativo com linguagem natural integrada, colaboração remota e aud
 - UI browser para viewer remoto (cliente é terminal)
 - Windows ConPTY (fase 1.2)
 - macOS (fase 1.1)
-- Login shell (sym_shell é CLI app, não substitui shell padrão)
+- Login shell (forge_shell é CLI app, não substitui shell padrão)
 - Execução automática de comandos LLM sem confirmação do usuário
 - VNC / desktop remoto
 - Build standalone PyInstaller (infra definida em task list; não executado no MVP)
@@ -83,17 +83,17 @@ Terminal Bash nativo com linguagem natural integrada, colaboração remota e aud
 
 ### NL Mode (default)
 
-O usuário digita em linguagem natural; sym_shell acumula a linha com echo local, dispara ForgeLLMAdapter em thread separada e exibe sugestão com comando, explicação e classificação de risco. Enter confirma; para risco HIGH o aviso vermelho é exibido e o usuário deve digitar manualmente. Toggle `!` alterna para Bash Mode; `!<cmd>` executa bash direto sem sair do NL Mode.
+O usuário digita em linguagem natural; forge_shell acumula a linha com echo local, dispara ForgeLLMAdapter em thread separada e exibe sugestão com comando, explicação e classificação de risco. Enter confirma; para risco HIGH o aviso vermelho é exibido e o usuário deve digitar manualmente. Toggle `!` alterna para Bash Mode; `!<cmd>` executa bash direto sem sair do NL Mode.
 
 **User Story**: US-01 — Entrada em linguagem natural
-**Entrypoint**: `sym_shell` (sem subcomando)
+**Entrypoint**: `forge_shell` (sem subcomando)
 
 ### Terminal Engine PTY Real
 
 PTYEngine spawna `/bin/bash -i` em PTY master/slave via `pty.fork()`. O I/O loop em `TerminalSession.run()` usa `select()` sobre stdin e master_fd. Termios é salvo antes de entrar em raw mode e restaurado em `try/finally` e signal handlers. SIGWINCH é capturado e propagado ao PTY via `ioctl TIOCSWINSZ`. AlternateScreenDetector rastreia sequências ANSI para desativar NL Mode em apps full-screen.
 
 **User Story**: US-02 — Terminal nativo (PTY real)
-**Entrypoint**: `sym_shell` / `sym_shell --passthrough`
+**Entrypoint**: `forge_shell` / `forge_shell --passthrough`
 
 ### Análise de Comando (`:explain`)
 
@@ -104,10 +104,10 @@ ForgeLLMAdapter.explain() usa system prompt separado para análise sem históric
 
 ### Sessão Remota (share + attach)
 
-`sym_shell share` cria session via SessionManager (token + TTL), inicia RelayHandler como thread daemon, cria RelayBridge (queue.Queue sync→async) e injeta no TerminalSession. Output do PTY é streamado via RelayBridge→HostRelayClient→RelayHandler→ViewerClient. `sym_shell attach <id>` conecta ao relay como viewer via asyncio e escreve output recebido em stdout. Senhas não são transmitidas (supressão de echo ativa).
+`forge_shell share` cria session via SessionManager (token + TTL), inicia RelayHandler como thread daemon, cria RelayBridge (queue.Queue sync→async) e injeta no TerminalSession. Output do PTY é streamado via RelayBridge→HostRelayClient→RelayHandler→ViewerClient. `forge_shell attach <id>` conecta ao relay como viewer via asyncio e escreve output recebido em stdout. Senhas não são transmitidas (supressão de echo ativa).
 
 **User Story**: US-04 — Sessão remota (view-only)
-**Entrypoint**: `sym_shell share` | `sym_shell attach <session-id>`
+**Entrypoint**: `forge_shell share` | `forge_shell attach <session-id>`
 
 ### Suggest-only Cards
 
@@ -121,19 +121,19 @@ SuggestCard define a estrutura de card (comando + explicação) que o viewer pro
 AuditLogger mantém registros em memória (AuditRecord) com action, origin, details e timestamp UTC. Registra comandos executados (com exit_code e origin), aprovações, join/leave de sessão. Export em JSON estruturado (`export_json`) ou texto plano (`export_text`). Wired em todas as sessões via DI em TerminalSession.
 
 **User Story**: US-06 — Auditoria de sessão
-**Entrypoint**: `~/.sym_shell/audit/` (configurável via AuditLogger)
+**Entrypoint**: `~/.forge_shell/audit/` (configurável via AuditLogger)
 
 ### Doctor
 
 DoctorRunner executa 4 checks: pty (pty.openpty), termios (tcgetattr), resize (ioctl TIOCSWINSZ), signals (SIGWINCH). Retorna DoctorReport com status OK/WARN/FAIL por check e overall.
 
-**Entrypoint**: `sym_shell doctor`
+**Entrypoint**: `forge_shell doctor`
 
 ### Configuração
 
-ConfigLoader carrega `~/.sym_shell/config.yaml` com merge de defaults. Na primeira execução cria o diretório e `config.yaml.example`. Suporta: NLModeConfig (default_active, context_lines, var_whitelist), LLMConfig (provider, model, api_key, timeout, retries), RelayConfig (url, port, tls), RedactionConfig (default_profile: dev|prod, patterns por perfil).
+ConfigLoader carrega `~/.forge_shell/config.yaml` com merge de defaults. Na primeira execução cria o diretório e `config.yaml.example`. Suporta: NLModeConfig (default_active, context_lines, var_whitelist), LLMConfig (provider, model, api_key, timeout, retries), RelayConfig (url, port, tls), RedactionConfig (default_profile: dev|prod, patterns por perfil).
 
-**Entrypoint**: `~/.sym_shell/config.yaml`
+**Entrypoint**: `~/.forge_shell/config.yaml`
 
 ---
 
@@ -147,7 +147,7 @@ ConfigLoader carrega `~/.sym_shell/config.yaml` com merge de defaults. Na primei
 | WebSocket (relay) | `websockets` | asyncio nativo, suporte a v16 (`close_code is None`) |
 | Config | `PyYAML` | YAML legível para config de terminal |
 | Testes | `pytest` + `pytest-asyncio` + `pexpect` | TDD, testes PTY reais, testes WebSocket reais |
-| Empacotamento | `setuptools` (`setuptools.build_meta`) | entry point `sym_shell` via pip install -e . |
+| Empacotamento | `setuptools` (`setuptools.build_meta`) | entry point `forge_shell` via pip install -e . |
 | Arquitetura | Clean / Hexagonal | camadas isoladas: adapters → application → infrastructure |
 
 > Diagramas: `project/docs/diagrams/` (class · components · database · architecture)
@@ -180,7 +180,7 @@ stdin (raw mode) ──► TerminalSession.run() [select loop]
           ┌─────┴──────┐
           │            │
      AuditLogger   RelayBridge ──► HostRelayClient ──► RelayHandler ──► ViewerClient
-     (~/.sym_shell/audit/)                              (WebSocket)      (attach CLI)
+     (~/.forge_shell/audit/)                              (WebSocket)      (attach CLI)
 ```
 
 > Diagramas: `project/docs/diagrams/` (class · components · database · architecture)
@@ -223,4 +223,4 @@ Ao finalizar uma feature (`/feature done`), SPEC.md é atualizado automaticament
 | 0.3.0 | 2026-02-25 | share CLI com RelayHandler inline + double-confirm HIGH risk + toggle indicator + config.yaml.example | cycle-06 |
 | 0.3.1 | 2026-02-26 | Diagramas (class, components, database, architecture) + SPEC.md | — |
 | 0.3.2 | 2026-02-26 | :help + :risk + Ctrl-C LLM cancel + múltiplos comandos + context injection (cwd+last_lines) + :explain streaming + SummarizeCompactor + symrouter | /feature |
-| 0.3.3 | 2026-02-26 | sym_shell config show/edit + attach --token + TLS relay (ssl_context + wss:// auto) + build distribuível (PyInstaller spec + pipx) | /feature |
+| 0.3.3 | 2026-02-26 | forge_shell config show/edit + attach --token + TLS relay (ssl_context + wss:// auto) + build distribuível (PyInstaller spec + pipx) | /feature |

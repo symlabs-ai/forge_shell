@@ -27,9 +27,9 @@ class TestCLIEntrypoint:
         rc, out, _ = run("--help")
         assert rc == 0
 
-    def test_help_mentions_sym_shell(self) -> None:
+    def test_help_mentions_forge_shell(self) -> None:
         rc, out, _ = run("--help")
-        assert "sym_shell" in out.lower() or "sym-shell" in out.lower() or rc == 0
+        assert "forge_shell" in out.lower() or "forge-shell" in out.lower() or rc == 0
 
     def test_share_subcommand_recognized(self) -> None:
         rc, out, err = run("share", "--help")

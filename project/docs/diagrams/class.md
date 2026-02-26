@@ -1,4 +1,4 @@
-# Class Diagram — sym_shell
+# Class Diagram — forge_shell
 
 As principais classes do sistema e seus relacionamentos, derivados do código em `src/`.
 
@@ -12,7 +12,7 @@ classDiagram
 
     %% ── Application — Use Cases ──────────────────────────────
     class TerminalSession {
-        -config: SymShellConfig
+        -config: ForgeShellConfig
         -_mode: SessionMode
         -_engine: PTYEngine
         -_detector: AlternateScreenDetector
@@ -233,7 +233,7 @@ classDiagram
     }
 
     %% ── Config ───────────────────────────────────────────────
-    class SymShellConfig {
+    class ForgeShellConfig {
         +nl_mode: NLModeConfig
         +redaction: RedactionConfig
         +llm: LLMConfig
@@ -242,7 +242,7 @@ classDiagram
 
     class ConfigLoader {
         -_path: Path
-        +load() SymShellConfig
+        +load() ForgeShellConfig
         +ensure_config_dir()
     }
 
@@ -258,7 +258,7 @@ classDiagram
     TerminalSession --> AuditLogger : injects (DI)
     TerminalSession --> RelayBridge : injects (DI)
     TerminalSession --> Redactor : injects (DI)
-    TerminalSession --> SymShellConfig : reads
+    TerminalSession --> ForgeShellConfig : reads
 
     NLInterceptor --> NLModeEngine : owns
     NLInterceptor --> InterceptResult : returns
@@ -279,5 +279,5 @@ classDiagram
     RelayBridge --> HostRelayClient : owns (async thread)
     RelayHandler --> RelayMessage : processes
 
-    ConfigLoader --> SymShellConfig : builds
+    ConfigLoader --> ForgeShellConfig : builds
 ```

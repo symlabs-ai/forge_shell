@@ -43,8 +43,8 @@ class TestAttachLive:
         mock_vc = self._make_mock_vc()
         with patch("src.adapters.cli.main.ViewerClient", return_value=mock_vc) as MockVC, \
              patch("src.adapters.cli.main.ConfigLoader") as MockCL:
-            from src.infrastructure.config.loader import SymShellConfig, RelayConfig, NLModeConfig, LLMConfig, RedactionConfig
-            mock_config = SymShellConfig(
+            from src.infrastructure.config.loader import ForgeShellConfig, RelayConfig, NLModeConfig, LLMConfig, RedactionConfig
+            mock_config = ForgeShellConfig(
                 relay=RelayConfig(url="ws://custom-relay:9999", port=9999),
             )
             MockCL.return_value.load.return_value = mock_config

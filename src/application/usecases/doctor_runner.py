@@ -1,7 +1,7 @@
 """
 DoctorRunner — T-42.
 
-Executa diagnóstico da engine sym_shell:
+Executa diagnóstico da engine forge_shell:
 - PTY: consegue criar master/slave?
 - termios: consegue ler attrs do stdin?
 - resize: consegue fazer ioctl TIOCSWINSZ?
@@ -40,7 +40,7 @@ class DoctorReport:
         return CheckStatus.OK
 
     def to_text(self) -> str:
-        lines = ["sym_shell doctor — diagnóstico da engine", ""]
+        lines = ["forge_shell doctor — diagnóstico da engine", ""]
         for name, status in self.checks.items():
             icon = {"ok": "✓", "warn": "⚠", "fail": "✗"}.get(status.value, "?")
             lines.append(f"  {icon} {name:<12} {status.value.upper()}")

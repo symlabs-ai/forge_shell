@@ -16,21 +16,21 @@ class TestTerminalSessionRelayBridge:
     def test_session_accepts_relay_bridge_injection(self) -> None:
         """TerminalSession deve ter atributo _relay_bridge injetável."""
         from src.application.usecases.terminal_session import TerminalSession
-        from src.infrastructure.config.loader import SymShellConfig
-        session = TerminalSession(config=SymShellConfig())
+        from src.infrastructure.config.loader import ForgeShellConfig
+        session = TerminalSession(config=ForgeShellConfig())
         assert hasattr(session, "_relay_bridge")
 
     def test_relay_bridge_defaults_none(self) -> None:
         from src.application.usecases.terminal_session import TerminalSession
-        from src.infrastructure.config.loader import SymShellConfig
-        session = TerminalSession(config=SymShellConfig())
+        from src.infrastructure.config.loader import ForgeShellConfig
+        session = TerminalSession(config=ForgeShellConfig())
         assert session._relay_bridge is None
 
     def test_handle_pty_output_calls_bridge_send(self) -> None:
         """Quando _relay_bridge está injetado, _handle_pty_output chama bridge.send()."""
         from src.application.usecases.terminal_session import TerminalSession
-        from src.infrastructure.config.loader import SymShellConfig
-        session = TerminalSession(config=SymShellConfig())
+        from src.infrastructure.config.loader import ForgeShellConfig
+        session = TerminalSession(config=ForgeShellConfig())
         mock_bridge = MagicMock()
         session._relay_bridge = mock_bridge
         session._stdout = MagicMock()
@@ -39,8 +39,8 @@ class TestTerminalSessionRelayBridge:
 
     def test_handle_pty_output_without_bridge_does_not_crash(self) -> None:
         from src.application.usecases.terminal_session import TerminalSession
-        from src.infrastructure.config.loader import SymShellConfig
-        session = TerminalSession(config=SymShellConfig())
+        from src.infrastructure.config.loader import ForgeShellConfig
+        session = TerminalSession(config=ForgeShellConfig())
         session._stdout = MagicMock()
         session._handle_pty_output(b"output data")  # sem bridge
 

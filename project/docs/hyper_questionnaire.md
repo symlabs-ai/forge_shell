@@ -1,4 +1,4 @@
-# Questionário de Alinhamento — sym_shell
+# Questionário de Alinhamento — forge_shell
 
 > Gerado pelo ft_coach em hyper-mode a partir do PRD v1.0 (2026-02-25).
 > Responda cada pergunta para que os artefatos sejam finalizados e o ciclo TDD possa iniciar.
@@ -8,11 +8,11 @@
 ## 🔍 Pontos Ambíguos
 
 ### A1 — Login shell vs. aplicativo CLI
-**Trecho**: "O sym_shell será login shell (via `chsh`) ou só aplicativo/CLI?" (PRD §14)
+**Trecho**: "O forge_shell será login shell (via `chsh`) ou só aplicativo/CLI?" (PRD §14)
 **Ambiguidade**: o PRD menciona a decisão mas não a toma. As duas opções têm implicações arquiteturais significativas.
-**Interpretação A**: sym_shell é login shell — substitui o Bash como shell padrão do usuário. Máxima integração, mas exige mais robustez (qualquer falha = usuário sem terminal).
-**Interpretação B**: sym_shell é um aplicativo CLI — o usuário roda `sym_shell` dentro do terminal existente, como tmux. Mais seguro, mais fácil de adotar e reverter.
-**Pergunta**: Para o MVP, sym_shell será login shell ou aplicativo CLI (rodando dentro do terminal existente)?
+**Interpretação A**: forge_shell é login shell — substitui o Bash como shell padrão do usuário. Máxima integração, mas exige mais robustez (qualquer falha = usuário sem terminal).
+**Interpretação B**: forge_shell é um aplicativo CLI — o usuário roda `forge_shell` dentro do terminal existente, como tmux. Mais seguro, mais fácil de adotar e reverter.
+**Pergunta**: Para o MVP, forge_shell será login shell ou aplicativo CLI (rodando dentro do terminal existente)?
 **Resposta**: B
 
 ---
@@ -50,9 +50,9 @@
 ## 🕳️ Lacunas
 
 ### L1 — Distribuição e instalação
-**O que falta**: o PRD não define como o sym_shell é instalado. Isso afeta a estrutura do pacote Python, entrypoints e packaging.
+**O que falta**: o PRD não define como o forge_shell é instalado. Isso afeta a estrutura do pacote Python, entrypoints e packaging.
 **Por que é necessário**: impacta T-03 (CLI entrypoint) e como o projeto é estruturado desde o início.
-**Pergunta**: Como o sym_shell será instalado no MVP? (ex.: `pip install sym-shell`, script de instalação, binário standalone, outro)
+**Pergunta**: Como o forge_shell será instalado no MVP? (ex.: `pip install forge-shell`, script de instalação, binário standalone, outro)
 **Resposta**: pyinstaller binario standalone
 
 ---
@@ -65,34 +65,34 @@
 
 ---
 
-### L3 — Arquivo de configuração do sym_shell
-**O que falta**: o PRD menciona várias coisas configuráveis (contexto enviado ao LLM, redaction, atalhos, etc.) mas não define onde e como o usuário configura o sym_shell.
+### L3 — Arquivo de configuração do forge_shell
+**O que falta**: o PRD menciona várias coisas configuráveis (contexto enviado ao LLM, redaction, atalhos, etc.) mas não define onde e como o usuário configura o forge_shell.
 **Por que é necessário**: sem um contrato de configuração definido, cada componente pode inventar seu próprio formato.
-**Pergunta**: Existe um arquivo de config para o sym_shell? (ex.: `~/.sym_shell/config.toml`, variáveis de ambiente, flags na CLI, outro)
+**Pergunta**: Existe um arquivo de config para o forge_shell? (ex.: `~/.forge_shell/config.toml`, variáveis de ambiente, flags na CLI, outro)
 **Resposta**: ___config.yaml, deve ser criado e hospedar esse tipo de configuracao
 
 ---
 
 ### L4 — UI do remoto (browser)
-**O que falta**: o PRD diz que a UI do remoto é browser no MVP, mas não define se é uma página servida pelo próprio sym_shell, uma app hospedada, ou outro.
+**O que falta**: o PRD diz que a UI do remoto é browser no MVP, mas não define se é uma página servida pelo próprio forge_shell, uma app hospedada, ou outro.
 **Por que é necessário**: impacta se o servidor de colaboração (T-23/T-24) também precisa servir HTML/JS ou apenas WebSocket.
-**Pergunta**: A UI browser do remoto é servida pelo próprio `sym_shell share` (HTML/JS embutido) ou é uma aplicação separada?
+**Pergunta**: A UI browser do remoto é servida pelo próprio `forge_shell share` (HTML/JS embutido) ou é uma aplicação separada?
 **Resposta**: ___a interface é terminal, nao vai ter browser no client. Entretanto podemos ter um admin pro relay intermediario
 
 ---
 
 ### L5 — Modelo de negócio / licença
-**O que falta**: o PRD não define se o sym_shell é open-source, closed-source, freemium, etc.
+**O que falta**: o PRD não define se o forge_shell é open-source, closed-source, freemium, etc.
 **Por que é necessário**: afeta decisões de packaging, distribuição e quais dependências podem ser usadas.
-**Pergunta**: sym_shell será open-source ou closed-source? Tem planos de monetização relevantes para o MVP?
+**Pergunta**: forge_shell será open-source ou closed-source? Tem planos de monetização relevantes para o MVP?
 **Resposta**: _opensource MIT__
 
 ---
 
 ## 💡 Sugestões de Melhoria
 
-### S1 — `sym_shell attach` — reconectar a sessão existente
-**Sugestão**: adicionar subcomando `sym_shell attach <session-id>` para reconectar a uma sessão sym_shell existente (comportamento similar ao `tmux attach`).
+### S1 — `forge_shell attach` — reconectar a sessão existente
+**Sugestão**: adicionar subcomando `forge_shell attach <session-id>` para reconectar a uma sessão forge_shell existente (comportamento similar ao `tmux attach`).
 **Benefício esperado**: útil para quem desconecta acidentalmente e quer retomar sem criar nova sessão.
 **Impacto no escopo**: M — requer gestão de estado de sessão persistente.
 **Pergunta**: Confirma incluir no escopo do cycle-01 ou deixar para ciclo futuro?
@@ -101,7 +101,7 @@
 ---
 
 ### S2 — Modo `--passthrough` para debug da engine
-**Sugestão**: flag `sym_shell --passthrough` que liga o PTY mas desativa completamente NL Mode, collab e auditoria — útil para testar se um bug é da engine ou das camadas superiores.
+**Sugestão**: flag `forge_shell --passthrough` que liga o PTY mas desativa completamente NL Mode, collab e auditoria — útil para testar se um bug é da engine ou das camadas superiores.
 **Benefício esperado**: acelera debugging da engine PTY e serve como smoke test de compatibilidade.
 **Impacto no escopo**: XS — apenas bypass das camadas.
 **Pergunta**: Confirma incluir?
@@ -130,9 +130,9 @@
 | A4 | "Aplicar" no card | **Executa diretamente** (confirmação já está no flow do card) | T-27: AC atualizado |
 | L1 | Distribuição/instalação | **PyInstaller — binário standalone** | T-new: build pipeline PyInstaller |
 | L2 | ForgeLLM | **Biblioteca Python** (`symlabs-ai/forge_llm`): `ChatSession`, `stream_chat()`, api_key no init, roteia para OpenAI/Anthropic/Ollama/OpenRouter | T-13: adapter usa ChatSession; sem HTTP próprio |
-| L3 | Arquivo de config | **`~/.sym_shell/config.yaml`** | T-new: config base + schema YAML |
+| L3 | Arquivo de config | **`~/.forge_shell/config.yaml`** | T-new: config base + schema YAML |
 | L4 | UI do remoto | **Terminal** (não browser); relay pode ter admin web separado | T-23/T-24: protocolo terminal↔relay↔terminal |
 | L5 | Licença | **MIT open-source** | Sem restrições de dependências |
-| S1 | `sym_shell attach` | **Incluído** — estado da sessão no host; relay recupera e informa ao client | T-new: attach + gestão de estado no host |
+| S1 | `forge_shell attach` | **Incluído** — estado da sessão no host; relay recupera e informa ao client | T-new: attach + gestão de estado no host |
 | S2 | `--passthrough` | **Incluído** — com help detalhado e claro | T-new: passthrough mode |
 | S3 | Perfis de redaction | **Incluído no MVP** — perfis `dev`/`prod` no config.yaml | T-19: expandido para perfis |

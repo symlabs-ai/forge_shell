@@ -1,5 +1,5 @@
 """
-C4-T-01 — RelayConfig em SymShellConfig
+C4-T-01 — RelayConfig em ForgeShellConfig
 DADO ConfigLoader
 QUANDO relay não está no config.yaml
 ENTÃO defaults são carregados (url=ws://localhost:8060, port=8060)
@@ -8,7 +8,7 @@ ENTÃO valores custom são carregados
 """
 import pytest
 from unittest.mock import patch, mock_open
-from src.infrastructure.config.loader import ConfigLoader, SymShellConfig
+from src.infrastructure.config.loader import ConfigLoader, ForgeShellConfig
 
 
 class TestRelayConfigDefaults:

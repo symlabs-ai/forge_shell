@@ -1,5 +1,5 @@
 """
-Event bus — schema de eventos padronizados do sym_shell.
+Event bus — schema de eventos padronizados do forge_shell.
 
 Todos os eventos transitam pelo sistema como dataclasses imutáveis
 com timestamp automático e kind discriminante.

@@ -1,5 +1,5 @@
 """
-T-42 — sym_shell doctor: diagnóstico da engine
+T-42 — forge_shell doctor: diagnóstico da engine
 DADO o DoctorRunner
 QUANDO executo diagnóstico
 ENTÃO recebo relatório com status de PTY, termios, sinais e resize

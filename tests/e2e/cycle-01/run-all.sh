@@ -39,7 +39,7 @@ run_check() {
 
 echo ""
 echo "╔══════════════════════════════════════════════╗"
-echo "║   sym_shell — E2E Gate · cycle-01            ║"
+echo "║   forge_shell — E2E Gate · cycle-01            ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
 

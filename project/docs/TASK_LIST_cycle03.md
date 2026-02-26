@@ -1,4 +1,4 @@
-# TASK LIST — sym_shell · cycle-03 · Relay WebSocket + Integration
+# TASK LIST — forge_shell · cycle-03 · Relay WebSocket + Integration
 
 > Fonte: retro cycle-02 + gap analysis
 > Objetivo: relay WebSocket real, attach wired, I/O integration tests, install smoke
@@ -20,7 +20,7 @@
 | ID      | Tarefa | Priority | Size | Status |
 |---------|--------|----------|------|--------|
 | C3-T-04 | Teste de integração `TerminalSession` com PTY real — I/O loop end-to-end | P0 | M | pending |
-| C3-T-05 | `pip install -e .` smoke — entry point `sym_shell` instalado funciona | P0 | S | pending |
+| C3-T-05 | `pip install -e .` smoke — entry point `forge_shell` instalado funciona | P0 | S | pending |
 
 ---
 
