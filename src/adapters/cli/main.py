@@ -298,10 +298,12 @@ def main(argv: list[str] | None = None) -> int:
             ssl=ssl_ctx,
         )
 
+        def _on_viewer_output(data: bytes) -> None:
+            sys.stdout.buffer.write(data)
+            sys.stdout.buffer.flush()
+
         async def _viewer_loop() -> None:
-            await viewer.connect(
-                on_output=lambda data: sys.stdout.buffer.write(data) or sys.stdout.buffer.flush()
-            )
+            await viewer.connect(on_output=_on_viewer_output)
             try:
                 # aguarda até relay fechar a conexão
                 await viewer.wait()
