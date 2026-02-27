@@ -48,6 +48,7 @@ class HostRelayClient:
     async def connect(
         self,
         on_suggest: Callable[[dict], None] | None = None,
+        on_chat: Callable[[dict], None] | None = None,
     ) -> None:
         if websockets is None:
             raise RuntimeError("websockets não instalado")
@@ -61,9 +62,10 @@ class HostRelayClient:
             "session_id": self._session_id,
             "payload": {"role": "host", "token": self._token},
         }).encode())
+        self._on_chat = on_chat
         # iniciar loop de recepção em background
-        if on_suggest is not None:
-            self._task = asyncio.create_task(self._receive_loop(on_suggest))
+        if on_suggest is not None or on_chat is not None:
+            self._task = asyncio.create_task(self._receive_loop(on_suggest, on_chat))
 
     async def send_output(self, data: bytes) -> None:
         """Enviar chunk de PTY output para o relay (codificado em base64)."""
@@ -76,9 +78,21 @@ class HostRelayClient:
         })
         await self._ws.send(msg.encode())
 
+    async def send_chat(self, text: str, sender: str = "host") -> None:
+        """Send a chat message to the relay for broadcast."""
+        if self._ws is None:
+            raise RuntimeError("HostRelayClient: não conectado")
+        msg = json.dumps({
+            "type": "chat",
+            "session_id": self._session_id,
+            "payload": {"text": text, "sender": sender},
+        })
+        await self._ws.send(msg.encode())
+
     async def _receive_loop(
         self,
-        on_suggest: Callable[[dict], None],
+        on_suggest: Callable[[dict], None] | None,
+        on_chat: Callable[[dict], None] | None,
     ) -> None:
         if self._ws is None:
             return
@@ -88,8 +102,11 @@ class HostRelayClient:
                     msg = json.loads(raw)
                 except (json.JSONDecodeError, ValueError):
                     continue
-                if msg.get("type") == "suggest":
+                msg_type = msg.get("type", "")
+                if msg_type == "suggest" and on_suggest:
                     on_suggest(msg.get("payload", {}))
+                elif msg_type == "chat" and on_chat:
+                    on_chat(msg.get("payload", {}))
         except Exception as exc:
             log.debug("HostRelayClient: receive loop encerrado (%s)", exc)
 

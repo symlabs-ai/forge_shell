@@ -32,10 +32,26 @@ _th = logging.FileHandler("/tmp/forge_shell_timing.log", mode="w")
 _th.setFormatter(logging.Formatter("%(asctime)s.%(msecs)03d  %(message)s", datefmt="%H:%M:%S"))
 _tlog.addHandler(_th)
 
+import fcntl
+import struct
+
 from src.infrastructure.config.loader import ForgeShellConfig
 from src.infrastructure.terminal_engine.pty_engine import PTYEngine
 from src.infrastructure.terminal_engine.alternate_screen import AlternateScreenDetector
 from src.application.usecases.nl_interceptor import InterceptAction
+
+# Chat panel imports (soft dependency on pyte)
+try:
+    from src.infrastructure.terminal_engine.vt_screen import VTScreen, PYTE_AVAILABLE
+except ImportError:
+    PYTE_AVAILABLE = False
+    VTScreen = None  # type: ignore
+
+from src.infrastructure.terminal_engine.chat_panel import ChatPanel
+from src.infrastructure.terminal_engine.split_renderer import SplitRenderer, MIN_SPLIT_COLS
+from src.infrastructure.terminal_engine.input_router import InputRouter, InputFocus
+
+_CHAT_WIDTH = 30
 
 
 class SessionMode(str, Enum):
@@ -83,6 +99,13 @@ class TerminalSession:
         self._output_lines: deque = deque(maxlen=config.nl_mode.context_lines)
         self._output_partial: str = ""
         self._redactor = None  # injetado via DI; None = sem redaction
+        # Chat panel state (Phase 3)
+        self._vt_screen = None          # VTScreen | None
+        self._chat_panel = None         # ChatPanel | None
+        self._split_renderer = None     # SplitRenderer | None
+        self._input_router = None       # InputRouter | None
+        self._chat_active = False       # split view ativo?
+        self._alt_screen_was_active = False  # track alternate screen transitions
 
     def _flush_pending_llm(self, timeout: float = 0.5) -> None:
         """Drena resultado pendente do LLM. Usado em testes (sem select loop)."""
@@ -96,6 +119,92 @@ class TerminalSession:
     @property
     def mode(self) -> SessionMode:
         return self._mode
+
+    # ------------------------------------------------------------------
+    # Chat panel management (Phase 3)
+    # ------------------------------------------------------------------
+
+    def _get_terminal_size(self) -> tuple[int, int]:
+        """Get current terminal rows, cols."""
+        try:
+            buf = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, b"\x00" * 8)
+            rows, cols = struct.unpack("HHHH", buf)[:2]
+            return (rows, cols)
+        except Exception:
+            return (24, 80)
+
+    def _activate_chat_panel(self) -> None:
+        """Activate split view with VTScreen + ChatPanel + SplitRenderer."""
+        if not PYTE_AVAILABLE:
+            _tlog.debug("chat: pyte not available, skipping activation")
+            return
+
+        rows, cols = self._get_terminal_size()
+        if cols < MIN_SPLIT_COLS:
+            _tlog.debug("chat: terminal too narrow (%d cols), skipping", cols)
+            return
+
+        out = self._stdout or getattr(sys.stdout, "buffer", None)
+        if out is None:
+            return
+
+        left_cols = cols - _CHAT_WIDTH - 1
+
+        self._vt_screen = VTScreen(rows, left_cols)
+        self._chat_panel = ChatPanel(rows, _CHAT_WIDTH)
+        self._split_renderer = SplitRenderer(out, rows, cols, chat_width=_CHAT_WIDTH)
+        self._split_renderer.attach(self._vt_screen, self._chat_panel)
+        self._input_router = InputRouter()
+        self._chat_active = True
+
+        # Resize PTY to left pane width
+        self._engine.resize(rows, left_cols)
+
+        # Force initial render
+        self._split_renderer.render(force=True)
+        _tlog.debug("chat: activated (left=%d, right=%d)", left_cols, _CHAT_WIDTH)
+
+    def _deactivate_chat_panel(self) -> None:
+        """Deactivate split view, restore full-screen terminal."""
+        if not self._chat_active:
+            return
+
+        if self._split_renderer:
+            self._split_renderer.detach()
+
+        self._vt_screen = None
+        self._chat_panel = None
+        self._split_renderer = None
+        self._input_router = None
+        self._chat_active = False
+
+        # Restore PTY to full terminal width
+        rows, cols = self._get_terminal_size()
+        self._engine.resize(rows, cols)
+        _tlog.debug("chat: deactivated, PTY full-screen (%dx%d)", rows, cols)
+
+    def _handle_chat_message(self, payload: dict) -> None:
+        """Handle incoming chat message from relay."""
+        if self._chat_panel is None:
+            return
+        sender = payload.get("sender", "?")
+        text = payload.get("text", "")
+        role = payload.get("role", sender)
+        self._chat_panel.add_message(sender, text, role)
+        if self._split_renderer:
+            self._split_renderer.render()
+
+    def _send_chat_message(self, text: str) -> None:
+        """Send chat message via relay and add to local panel."""
+        if self._chat_panel is not None:
+            self._chat_panel.add_message("host", text, "host")
+        if self._relay_bridge is not None:
+            try:
+                self._relay_bridge.send_chat(text, sender="host")
+            except Exception:
+                pass
+        if self._split_renderer:
+            self._split_renderer.render()
 
     # ------------------------------------------------------------------
     # I/O routing (testável sem I/O real)
@@ -112,6 +221,27 @@ class TerminalSession:
             self._engine.write(data)
             return
 
+        # Chat split active: route through InputRouter
+        if self._chat_active and self._input_router:
+            for target, chunk in self._input_router.feed(data):
+                if target == "toggle":
+                    self._input_router.toggle_focus()
+                    self._split_renderer.set_focus(self._input_router.focus.value)
+                    self._split_renderer.render(force=True)
+                elif target == "terminal":
+                    self._route_input_to_pty(chunk)
+                elif target == "chat":
+                    msg = self._chat_panel.handle_key(chunk)
+                    if msg is not None:
+                        self._send_chat_message(msg)
+                    if self._split_renderer:
+                        self._split_renderer.render()
+            return
+
+        self._route_input_to_pty(data)
+
+    def _route_input_to_pty(self, data: bytes) -> None:
+        """Route input to PTY (original _route_input logic without chat split)."""
         # comando em execução: todo input vai direto para PTY (senha, confirmações, etc.)
         if self._pty_running:
             self._engine.write(data)
@@ -481,7 +611,33 @@ class TerminalSession:
 
     def _handle_pty_output(self, data: bytes) -> None:
         """Processar output do PTY: detectar alternate screen, auditar, relay e escrever em stdout."""
+        prev_alt = self._detector.is_active
         self._detector.feed(data)
+        curr_alt = self._detector.is_active
+
+        # Handle alternate screen transitions when chat is active
+        if self._chat_active:
+            if not prev_alt and curr_alt:
+                # Entering alternate screen (vim, top): hide chat, go full-width
+                self._alt_screen_was_active = True
+                if self._split_renderer:
+                    self._split_renderer.detach()
+                rows, cols = self._get_terminal_size()
+                self._engine.resize(rows, cols)
+            elif prev_alt and not curr_alt and self._alt_screen_was_active:
+                # Exiting alternate screen: restore split
+                self._alt_screen_was_active = False
+                rows, cols = self._get_terminal_size()
+                if self._vt_screen and self._chat_panel and self._split_renderer:
+                    out = self._stdout or getattr(sys.stdout, "buffer", None)
+                    left_cols = cols - _CHAT_WIDTH - 1
+                    self._vt_screen.resize(rows, left_cols)
+                    self._chat_panel.resize(rows, _CHAT_WIDTH)
+                    self._split_renderer = SplitRenderer(out, rows, cols, chat_width=_CHAT_WIDTH)
+                    self._split_renderer.attach(self._vt_screen, self._chat_panel)
+                    self._engine.resize(rows, left_cols)
+                    self._split_renderer.render(force=True)
+
         # Detecta prompt bash/zsh/fish no output → comando terminou, volta ao NL buffer
         if self._pty_running:
             stripped = re.sub(rb'\x1b\[[0-9;]*[mKHJA-Za-z]', b'', data)
@@ -500,18 +656,25 @@ class TerminalSession:
         stripped_for_pwd = re.sub(rb'\x1b\[[0-9;]*[mKHJA-Za-z]', b'', data)
         if self._PASSWORD_PROMPT.search(stripped_for_pwd):
             self._in_password_entry = True
-            # exibir o próprio prompt mas suprimir o que vier depois dele neste chunk
-            prompt_match = self._PASSWORD_PROMPT.search(stripped_for_pwd)
-            # exibir até o fim do match no chunk (inclui o prompt + espaço final)
-            # para segurança exibimos tudo até aqui e suprimimos leituras seguintes
             out = self._stdout or getattr(sys.stdout, "buffer", None)
-            if out is not None:
+            if self._chat_active and not self._alt_screen_was_active and self._vt_screen:
+                self._vt_screen.feed(data)
+                if self._split_renderer:
+                    self._split_renderer.render()
+            elif out is not None:
                 out.write(data)
             return
 
-        out = self._stdout or getattr(sys.stdout, "buffer", None)
-        if out is not None:
-            out.write(data)
+        # Write output: through VTScreen (split) or direct to stdout
+        if self._chat_active and not self._alt_screen_was_active and self._vt_screen:
+            self._vt_screen.feed(data)
+            if self._split_renderer:
+                self._split_renderer.render()
+        else:
+            out = self._stdout or getattr(sys.stdout, "buffer", None)
+            if out is not None:
+                out.write(data)
+
         self._accumulate_output_lines(data)
         if self._relay_bridge is not None:
             try:
@@ -530,16 +693,24 @@ class TerminalSession:
     # ------------------------------------------------------------------
 
     def _install_sigwinch_handler(self) -> None:
-        """Instalar handler SIGWINCH que repassa resize ao PTY."""
+        """Instalar handler SIGWINCH que repassa resize ao PTY (e chat panel se ativo)."""
         def _handler(signum: int, frame: object) -> None:
             try:
-                import fcntl
-                import struct
-                import termios
-                buf = b"\x00" * 8
-                buf = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, buf)
-                rows, cols = struct.unpack("HHHH", buf)[:2]
-                self._engine.resize(rows=rows, cols=cols)
+                rows, cols = self._get_terminal_size()
+                if self._chat_active and cols >= MIN_SPLIT_COLS:
+                    left_cols = cols - _CHAT_WIDTH - 1
+                    if self._vt_screen:
+                        self._vt_screen.resize(rows, left_cols)
+                    if self._chat_panel:
+                        self._chat_panel.resize(rows, _CHAT_WIDTH)
+                    if self._split_renderer:
+                        self._split_renderer.resize(rows, cols)
+                    self._engine.resize(rows=rows, cols=left_cols)
+                elif self._chat_active and cols < MIN_SPLIT_COLS:
+                    # Terminal too narrow — deactivate chat
+                    self._deactivate_chat_panel()
+                else:
+                    self._engine.resize(rows=rows, cols=cols)
             except Exception:
                 pass
 
@@ -603,7 +774,31 @@ class TerminalSession:
                     suggestion = self._relay_bridge.get_suggest()
                     if suggestion is not None:
                         self._handle_agent_suggest(suggestion)
+
+                # Drena mensagens de chat via relay
+                if self._relay_bridge is not None:
+                    chat = self._relay_bridge.get_chat()
+                    if chat is not None:
+                        self._handle_chat_message(chat)
+
+                # Auto-ativar chat quando relay_bridge existe e chat não está ativo
+                if self._relay_bridge is not None and not self._chat_active:
+                    self._activate_chat_panel()
+
+                # Flush escape buffer on timeout (no stdin data this iteration)
+                if self._input_router and stdin_fd not in rfds:
+                    for target, chunk in self._input_router.flush_esc_buffer():
+                        if target == "terminal":
+                            self._route_input_to_pty(chunk)
+                        elif target == "chat" and self._chat_panel:
+                            msg = self._chat_panel.handle_key(chunk)
+                            if msg is not None:
+                                self._send_chat_message(msg)
+                            if self._split_renderer:
+                                self._split_renderer.render()
         finally:
+            if self._chat_active:
+                self._deactivate_chat_panel()
             self._engine.restore_stdin()
             self._engine.close()
 

@@ -45,7 +45,7 @@ class TestRelayBridge:
         """Dados enfileirados são enviados via HostRelayClient.send_output()."""
         sent = []
 
-        async def fake_connect():
+        async def fake_connect(**kwargs):
             pass
 
         async def fake_send(data):

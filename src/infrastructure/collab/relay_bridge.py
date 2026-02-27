@@ -22,7 +22,7 @@ from src.infrastructure.collab.host_relay_client import HostRelayClient
 
 log = logging.getLogger(__name__)
 
-_SENTINEL = None  # sinal de parada na queue
+_SENTINEL = object()  # sinal de parada na queue
 
 
 class RelayBridge:
@@ -44,6 +44,8 @@ class RelayBridge:
         self._ssl = ssl
         self._queue: queue.Queue[bytes | None] = queue.Queue()
         self._suggest_queue: queue.Queue[dict] = queue.Queue()
+        self._chat_queue: queue.Queue[dict] = queue.Queue()       # incoming chat
+        self._chat_out_queue: queue.Queue[dict] = queue.Queue()   # outgoing chat
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._started = False
@@ -77,6 +79,17 @@ class RelayBridge:
         except queue.Empty:
             return None
 
+    def get_chat(self) -> dict | None:
+        """Poll non-blocking para mensagens de chat recebidas (thread-safe)."""
+        try:
+            return self._chat_queue.get_nowait()
+        except queue.Empty:
+            return None
+
+    def send_chat(self, text: str, sender: str = "host") -> None:
+        """Enfileira mensagem de chat para envio ao relay (thread-safe, síncrono)."""
+        self._chat_out_queue.put({"text": text, "sender": sender})
+
     def _run_loop(self) -> None:
         """Loop asyncio que corre na thread background."""
         asyncio.run(self._async_loop())
@@ -92,8 +105,11 @@ class RelayBridge:
         def _on_suggest(payload: dict) -> None:
             self._suggest_queue.put_nowait(payload)
 
+        def _on_chat(payload: dict) -> None:
+            self._chat_queue.put_nowait(payload)
+
         try:
-            await client.connect(on_suggest=_on_suggest)
+            await client.connect(on_suggest=_on_suggest, on_chat=_on_chat)
         except Exception as exc:
             log.debug("RelayBridge: falha ao conectar: %s", exc)
             return
@@ -101,20 +117,37 @@ class RelayBridge:
         try:
             while True:
                 # poll a queue sem bloquear o event loop
+                got_data = False
                 try:
                     item = self._queue.get_nowait()
+                    got_data = True
                 except queue.Empty:
-                    await asyncio.sleep(0.01)
-                    continue
+                    item = None
 
                 if item is _SENTINEL:
                     break
 
+                if got_data:
+                    try:
+                        await client.send_output(item)
+                    except Exception as exc:
+                        log.debug("RelayBridge: erro ao enviar: %s", exc)
+                        break
+
+                # drain outgoing chat messages
                 try:
-                    await client.send_output(item)
+                    chat_msg = self._chat_out_queue.get_nowait()
+                    await client.send_chat(
+                        text=chat_msg["text"],
+                        sender=chat_msg.get("sender", "host"),
+                    )
+                except queue.Empty:
+                    pass
                 except Exception as exc:
-                    log.debug("RelayBridge: erro ao enviar: %s", exc)
-                    break
+                    log.debug("RelayBridge: erro ao enviar chat: %s", exc)
+
+                if not got_data:
+                    await asyncio.sleep(0.01)
         finally:
             try:
                 await client.close()

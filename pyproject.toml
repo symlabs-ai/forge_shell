@@ -12,6 +12,7 @@ dependencies = [
     "pyyaml>=6.0",
     "websockets>=14.0",
     "forge-llm>=0.7.4",
+    "pyte>=0.8",
 ]
 
 [project.scripts]
