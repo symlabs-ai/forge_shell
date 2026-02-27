@@ -82,8 +82,10 @@ class SplitRenderer:
         right_w = self._chat_width
         rows = self._total_rows
 
-        # Get left pane content from VTScreen
-        vt_lines = self._vt.get_display()
+        # Get left pane content from VTScreen (with ANSI colors)
+        vt_lines = self._vt.get_display_ansi()
+        # Plain text lines for width calculation
+        vt_plain = self._vt.get_display()
 
         # Get right pane content from ChatPanel
         chat_lines = self._chat.render_lines()
@@ -91,16 +93,20 @@ class SplitRenderer:
         # Build composite frame
         frame: list[bytes] = []
         for r in range(rows):
-            # Left side: VTScreen line (pad/truncate to left_w)
+            # Left side: VTScreen line with ANSI colors
             if r < len(vt_lines):
-                left = vt_lines[r]
+                left_ansi = vt_lines[r]
+                left_text_len = len(vt_plain[r]) if r < len(vt_plain) else 0
             else:
-                left = ""
-            # Pad or truncate plain text to left_w
-            if len(left) < left_w:
-                left_padded = left + " " * (left_w - len(left))
+                left_ansi = b""
+                left_text_len = 0
+
+            # Pad to left_w (add spaces after reset)
+            if left_text_len < left_w:
+                padding = b" " * (left_w - left_text_len)
+                left_padded = left_ansi + b"\033[0m" + padding
             else:
-                left_padded = left[:left_w]
+                left_padded = left_ansi + b"\033[0m"
 
             # Right side: ChatPanel line
             if r < len(chat_lines):
@@ -108,8 +114,8 @@ class SplitRenderer:
             else:
                 right = b""
 
-            # Compose: left (plain text) + separator + right (ANSI bytes)
-            line = (left_padded.encode("utf-8", errors="replace")
+            # Compose: left (ANSI) + separator + right (ANSI bytes)
+            line = (left_padded
                     + b" "  # space before separator
                     + self._separator
                     + right)

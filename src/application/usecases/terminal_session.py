@@ -185,6 +185,8 @@ class TerminalSession:
 
     def _handle_chat_message(self, payload: dict) -> None:
         """Handle incoming chat message from relay."""
+        if not self._chat_active:
+            self._activate_chat_panel()
         if self._chat_panel is None:
             return
         sender = payload.get("sender", "?")
@@ -781,9 +783,9 @@ class TerminalSession:
                     if chat is not None:
                         self._handle_chat_message(chat)
 
-                # Auto-ativar chat quando relay_bridge existe e chat não está ativo
-                if self._relay_bridge is not None and not self._chat_active:
-                    self._activate_chat_panel()
+                # Auto-ativar chat quando primeiro participante conecta
+                # (detectado pelo recebimento de chat ou suggest)
+                # NÃO ativar imediatamente — preserva session info na tela
 
                 # Flush escape buffer on timeout (no stdin data this iteration)
                 if self._input_router and stdin_fd not in rfds:
