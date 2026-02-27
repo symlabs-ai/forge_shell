@@ -214,6 +214,11 @@ class TerminalSession:
 
     def _route_input(self, data: bytes) -> None:
         """Rotear bytes de input: PTY direto (passthrough/alternate) ou interceptor."""
+        # Ctrl+X encerra sessão de share (apenas quando relay ativo)
+        if data == b"\x18" and self._relay_bridge is not None:
+            self._engine.close()
+            return
+
         if self._mode == SessionMode.PASSTHROUGH:
             self._engine.write(data)
             return
