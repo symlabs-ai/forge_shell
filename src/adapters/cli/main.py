@@ -427,7 +427,9 @@ def main(argv: list[str] | None = None) -> int:
         ssl_ctx = _build_ssl_client_context(config.relay.tls)
 
         print(f"[forge_shell agent] Conectando à máquina: {args.machine_code}", file=sys.stderr)
-        print(f"[forge_shell agent] stdin: JSON suggest (uma linha por sugestão)", file=sys.stderr)
+        print(f"[forge_shell agent] stdin: JSON (uma linha por comando)", file=sys.stderr)
+        print(f'[forge_shell agent]   input:   {{"type":"input","data":"base64..."}}', file=sys.stderr)
+        print(f'[forge_shell agent]   suggest: {{"commands":[...],"explanation":"...","risk_level":"LOW"}}', file=sys.stderr)
         print(f"[forge_shell agent] stdout: PTY output (raw bytes)", file=sys.stderr)
         print(f"[forge_shell agent] Ctrl+C para encerrar", file=sys.stderr)
 
@@ -455,14 +457,21 @@ def main(argv: list[str] | None = None) -> int:
                         continue
                     try:
                         import json
+                        import base64 as _b64
                         payload = json.loads(line)
                     except (ValueError, TypeError):
                         print(f"[forge_shell agent] JSON inválido: {line}", file=sys.stderr)
                         continue
-                    commands = payload.get("commands", [])
-                    explanation = payload.get("explanation", "")
-                    risk_level = payload.get("risk_level", "LOW")
-                    await agent.send_suggest(commands, explanation, risk_level)
+                    msg_type = payload.get("type", "suggest")
+                    if msg_type == "input":
+                        data = _b64.b64decode(payload.get("data", ""))
+                        if data:
+                            await agent.send_input(data)
+                    else:
+                        commands = payload.get("commands", [])
+                        explanation = payload.get("explanation", "")
+                        risk_level = payload.get("risk_level", "LOW")
+                        await agent.send_suggest(commands, explanation, risk_level)
             except (KeyboardInterrupt, asyncio.CancelledError):
                 pass
             finally:
