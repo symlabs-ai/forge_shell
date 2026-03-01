@@ -40,9 +40,8 @@ import struct
 from src.infrastructure.config.loader import ForgeShellConfig
 from src.infrastructure.terminal_engine.pty_engine import PTYEngine
 from src.infrastructure.terminal_engine.alternate_screen import AlternateScreenDetector
-from src.application.usecases.nl_interceptor import InterceptAction
+from src.application.usecases.intercept_types import InterceptAction
 
-from src.infrastructure.terminal_engine.split_renderer import MIN_SPLIT_COLS
 from src.infrastructure.terminal_engine.input_router import InputFocus
 from src.application.usecases.output_renderer import OutputRenderer
 from src.application.usecases.chat_manager import ChatManager

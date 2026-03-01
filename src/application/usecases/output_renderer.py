@@ -10,7 +10,7 @@ import re
 import sys
 from typing import TYPE_CHECKING
 
-from src.application.usecases.nl_interceptor import InterceptAction
+from src.application.usecases.intercept_types import InterceptAction
 
 if TYPE_CHECKING:
     from src.infrastructure.terminal_engine.pty_engine import PTYEngine

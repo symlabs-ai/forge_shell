@@ -11,30 +11,9 @@ Retorna um InterceptResult que descreve a ação a tomar:
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from enum import Enum
 
+from src.application.usecases.intercept_types import InterceptAction, InterceptResult
 from src.application.usecases.nl_mode_engine import NLModeEngine
-from src.infrastructure.intelligence.nl_response import NLResponse, RiskLevel
-
-
-class InterceptAction(str, Enum):
-    TOGGLE = "toggle"
-    EXEC_BASH = "exec_bash"
-    SHOW_SUGGESTION = "show_suggestion"
-    EXPLAIN = "explain"
-    HELP = "help"
-    RISK = "risk"
-    NOOP = "noop"
-
-
-@dataclass
-class InterceptResult:
-    action: InterceptAction
-    bash_command: str | None = None
-    suggestion: NLResponse | None = None
-    requires_double_confirm: bool = False
-    risk_level: RiskLevel | None = None
 
 
 class NLInterceptor:

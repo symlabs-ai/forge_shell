@@ -3,6 +3,10 @@ ChatManager — gerenciamento do chat panel (split view).
 
 Extraído de TerminalSession para separar a responsabilidade de ativação,
 desativação e comunicação do chat panel do loop principal de I/O.
+
+Imports de pyte/VTScreen/SplitRenderer são lazy (dentro de activate) para
+permitir que TerminalSession seja importado sem puxar pyte — necessário
+para o binário forge_host standalone.
 """
 from __future__ import annotations
 
@@ -13,19 +17,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.infrastructure.terminal_engine.pty_engine import PTYEngine
 
-try:
-    from src.infrastructure.terminal_engine.vt_screen import VTScreen, PYTE_AVAILABLE
-except ImportError:
-    PYTE_AVAILABLE = False
-    VTScreen = None  # type: ignore
-
-from src.infrastructure.terminal_engine.chat_panel import ChatPanel
-from src.infrastructure.terminal_engine.split_renderer import SplitRenderer, MIN_SPLIT_COLS
-from src.infrastructure.terminal_engine.input_router import InputRouter
-
 _tlog = logging.getLogger("forge_shell.timing")
 
 _CHAT_WIDTH = 30
+_MIN_SPLIT_COLS = 60  # mirrored from split_renderer.MIN_SPLIT_COLS
 
 
 class ChatManager:
@@ -48,12 +43,22 @@ class ChatManager:
 
     def activate(self) -> None:
         """Activate split view with VTScreen + ChatPanel + SplitRenderer."""
+        try:
+            from src.infrastructure.terminal_engine.vt_screen import PYTE_AVAILABLE
+        except ImportError:
+            _tlog.debug("chat: pyte not available, skipping activation")
+            return
         if not PYTE_AVAILABLE:
             _tlog.debug("chat: pyte not available, skipping activation")
             return
 
+        from src.infrastructure.terminal_engine.vt_screen import VTScreen
+        from src.infrastructure.terminal_engine.chat_panel import ChatPanel
+        from src.infrastructure.terminal_engine.split_renderer import SplitRenderer
+        from src.infrastructure.terminal_engine.input_router import InputRouter
+
         rows, cols = self._get_terminal_size()
-        if cols < MIN_SPLIT_COLS:
+        if cols < _MIN_SPLIT_COLS:
             _tlog.debug("chat: terminal too narrow (%d cols), skipping", cols)
             return
 
@@ -119,7 +124,7 @@ class ChatManager:
 
     def handle_resize(self, rows: int, cols: int) -> None:
         """Handle terminal resize for chat panel."""
-        if cols >= MIN_SPLIT_COLS:
+        if cols >= _MIN_SPLIT_COLS:
             left_cols = cols - _CHAT_WIDTH - 1
             if self.vt_screen:
                 self.vt_screen.resize(rows, left_cols)
@@ -144,6 +149,7 @@ class ChatManager:
         self.alt_screen_was_active = False
         rows, cols = self._get_terminal_size()
         if self.vt_screen and self.chat_panel and self.split_renderer:
+            from src.infrastructure.terminal_engine.split_renderer import SplitRenderer
             out = self._out
             left_cols = cols - _CHAT_WIDTH - 1
             self.vt_screen.resize(rows, left_cols)

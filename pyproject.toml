@@ -19,6 +19,8 @@ dependencies = [
 
 [project.scripts]
 forge_shell = "src.adapters.cli.main:main"
+forge_relay = "src.adapters.cli.relay_main:main"
+forge_host  = "src.adapters.cli.host_main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

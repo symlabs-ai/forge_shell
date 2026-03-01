@@ -8,3 +8,6 @@ build/
 .venv/
 .env
 *.spec
+!forge_shell.spec
+!forge_relay.spec
+!forge_host.spec
