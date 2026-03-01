@@ -1,9 +1,9 @@
 # SPEC.md — forge_shell
 
-> Versão: 0.3.3
+> Versão: 0.5.1
 > MVP entregue em: 2026-02-25
-> Última atualização: 2026-02-26
-> Status: mvp
+> Última atualização: 2026-03-01
+> Status: active development
 
 ---
 
@@ -62,19 +62,32 @@ Terminal Bash nativo com linguagem natural integrada, colaboração remota e aud
 | `forge_shell attach --token` — token auth no viewer (RelayHandler valida) | US-04 | Entregue | /feature |
 | TLS no relay — ssl_context em RelayHandler + auto wss:// + cert_file/key_file | US-04 | Entregue | /feature |
 | Build distribuível — forge_shell.spec PyInstaller + scripts/build.sh + pipx | — | Entregue | /feature |
+| Machine code persistente (NNN-NNN-NNN) + senha de sessão (6 dígitos) | US-04 | Entregue | v0.4.0 |
+| Relay 3 camadas — `forge_shell relay` como serviço standalone | US-04 | Entregue | v0.4.0 |
+| HTTP `/health` endpoint no relay (status + sessions + agents) | US-04 | Entregue | v0.4.0 |
+| `forge_shell agent` — CLI agent role (recebe output, envia suggest via JSON) | US-05 | Entregue | v0.4.1 |
+| Chat split terminal — VTScreen + ChatPanel + SplitRenderer (F4 toggle) | US-04 | Entregue | v0.4.2 |
+| Chat protocol — `send_chat`/`get_chat` em host, viewer e agent clients | US-04 | Entregue | v0.4.2 |
+| Ctrl+X sai da sessão share | US-04 | Entregue | v0.4.3 |
+| Refactor: OutputRenderer + ChatManager extraídos de TerminalSession | — | Entregue | v0.4.4 |
+| Refactor: Port ABCs (LLMPort, AuditorPort, RedactorPort, RiskEnginePort, AgentPort) | — | Entregue | v0.4.4 |
+| Refactor: Domain value objects (RiskLevel, NLResponse movidos para domain/) | — | Entregue | v0.4.4 |
+| Refactor: Constructor DI + `_build_session()` factory centralizada | — | Entregue | v0.4.4 |
+| Agent system — 7 tools (read/write/edit/list file, sonda, web_search, web_fetch) | US-07 | Entregue | v0.5.0 |
+| AgentService — orquestrador com ChatAgent + ToolRegistry + stream_chat multi-round | US-07 | Entregue | v0.5.0 |
+| MemoryStore — memória persistente 2 camadas (MEMORY.md + HISTORY.md) + consolidação via LLM | US-07 | Entregue | v0.5.0 |
+| AgentConfig — seção `agent:` no config.yaml (enabled, max_tool_rounds, exec_timeout, deny_patterns) | US-07 | Entregue | v0.5.0 |
+| NLModeEngine respeita `default_active` do config | US-01 | Entregue | v0.5.1 |
 
 ### O que está fora do escopo
 
 - Co-control remoto (injeção de input pelo viewer) — pós-MVP
-- Chat bidirecional interativo wired no CLI (protocolo definido; integração com NL Mode fica pós-MVP)
 - UI browser para viewer remoto (cliente é terminal)
 - Windows ConPTY (fase 1.2)
 - macOS (fase 1.1)
 - Login shell (forge_shell é CLI app, não substitui shell padrão)
 - Execução automática de comandos LLM sem confirmação do usuário
 - VNC / desktop remoto
-- Build standalone PyInstaller (infra definida em task list; não executado no MVP)
-- `:risk <cmd>` como subcomando separado (RiskEngine existe; comando CLI `:risk` não foi wired)
 - Monitoramento sem consentimento
 
 ---
@@ -102,19 +115,19 @@ ForgeLLMAdapter.explain() usa system prompt separado para análise sem históric
 **User Story**: US-03 — Explicação e análise de risco
 **Entrypoint**: `:explain <cmd>` no NL Mode ou Bash Mode
 
-### Sessão Remota (share + attach)
+### Sessão Remota (share + attach + relay)
 
-`forge_shell share` cria session via SessionManager (token + TTL), inicia RelayHandler como thread daemon, cria RelayBridge (queue.Queue sync→async) e injeta no TerminalSession. Output do PTY é streamado via RelayBridge→HostRelayClient→RelayHandler→ViewerClient. `forge_shell attach <id>` conecta ao relay como viewer via asyncio e escreve output recebido em stdout. Senhas não são transmitidas (supressão de echo ativa).
+Arquitetura 3 camadas: host e viewers conectam a um relay standalone (`forge_shell relay`), sem necessidade de IP público ou porta aberta no host. `forge_shell share` gera machine code persistente (NNN-NNN-NNN via `~/.forge_shell/machine_id`) e senha de sessão (6 dígitos), conecta ao relay via RelayBridge e streama output do PTY. `forge_shell attach <code> <senha>` conecta como viewer read-only. Chat bidirecional via split terminal (F4 toggle) com VTScreen + ChatPanel + SplitRenderer. Relay expõe HTTP `/health` endpoint para monitoramento.
 
-**User Story**: US-04 — Sessão remota (view-only)
-**Entrypoint**: `forge_shell share` | `forge_shell attach <session-id>`
+**User Story**: US-04 — Sessão remota (view-only + chat)
+**Entrypoint**: `forge_shell share` | `forge_shell attach <code> <senha>` | `forge_shell relay`
 
-### Suggest-only Cards
+### Agent Suggest (cards + CLI)
 
-SuggestCard define a estrutura de card (comando + explicação) que o viewer propõe ao host. O host recebe o card e decide se aplica. Protocolo definido em `protocol.py` (MessageType.SUGGEST); integração com CLI interativo fica pós-MVP.
+SuggestCard define a estrutura de card (comando + explicação) que o agent propõe ao host. `forge_shell agent <code> <senha>` conecta como agent role — recebe output do PTY em stdout e lê sugestões de stdin como JSON. O host recebe o card e decide se aplica.
 
 **User Story**: US-05 — Sugestões remotas (cards)
-**Entrypoint**: protocolo via relay (infra entregue, CLI wiring pós-MVP)
+**Entrypoint**: `forge_shell agent <code> <senha>`
 
 ### Auditoria de Sessão
 
@@ -129,11 +142,26 @@ DoctorRunner executa 4 checks: pty (pty.openpty), termios (tcgetattr), resize (i
 
 **Entrypoint**: `forge_shell doctor`
 
+### Agent System (NL Mode com tools)
+
+Quando `agent.enabled: true` no config, queries NL são roteadas pelo AgentService em vez da chamada direta ao ForgeLLMAdapter. AgentService cria um ChatAgent (forge_llm) com ToolRegistry contendo 7 tools que permitem ao LLM investigar o ambiente antes de sugerir comandos. Usa `stream_chat(auto_execute_tools=True)` para suportar múltiplas rodadas de tools. Resposta final é JSON idêntico ao NL Mode padrão (NLResponse).
+
+**Tools disponíveis:**
+- `read_file`, `write_file`, `edit_file`, `list_dir` — filesystem com workspace boundary
+- `sonda` — execução silenciosa de comandos (subprocess.run com deny patterns e timeout)
+- `web_search` — Brave Search API
+- `web_fetch` — httpx + readability para extração de conteúdo
+
+**Memória:** MemoryStore persiste em `~/.forge_shell/agent/memory/` com MEMORY.md (fatos long-term) e HISTORY.md (log com timestamps). Consolidação periódica via LLM com tool `save_memory`.
+
+**User Story**: US-07 — Agent com investigação via tools
+**Entrypoint**: `agent.enabled: true` no config.yaml
+
 ### Configuração
 
-ConfigLoader carrega `~/.forge_shell/config.yaml` com merge de defaults. Na primeira execução cria o diretório e `config.yaml.example`. Suporta: NLModeConfig (default_active, context_lines, var_whitelist), LLMConfig (provider, model, api_key, timeout, retries), RelayConfig (url, port, tls), RedactionConfig (default_profile: dev|prod, patterns por perfil).
+ConfigLoader carrega `~/.forge_shell/config.yaml` com merge de defaults. Na primeira execução cria o diretório e `config.yaml.example`. Suporta: NLModeConfig (default_active, context_lines, var_whitelist), LLMConfig (provider, model, api_key, timeout, retries), RelayConfig (url, port, tls), CollabConfig (permanent_password), AgentConfig (enabled, max_tool_rounds, exec_timeout, exec_deny_patterns, memory_enabled, brave_api_key, web_fetch_max_chars), RedactionConfig (default_profile: dev|prod, patterns por perfil).
 
-**Entrypoint**: `~/.forge_shell/config.yaml`
+**Entrypoint**: `~/.forge_shell/config.yaml` | `forge_shell config [show|edit]`
 
 ---
 
@@ -145,6 +173,9 @@ ConfigLoader carrega `~/.forge_shell/config.yaml` com merge de defaults. Na prim
 | Terminal engine | `pty` + `termios` + `fcntl` (stdlib) | PTY real sem dependências externas |
 | LLM | `forge_llm` (symlabs-ai/forge_llm) | provider interno Symlabs; abstrai ollama/openai/anthropic/xai/symrouter |
 | WebSocket (relay) | `websockets` | asyncio nativo, suporte a v16 (`close_code is None`) |
+| Terminal emulation | `pyte` | VTScreen para split terminal (chat panel) |
+| HTTP client | `httpx` | Requisições sync para web_fetch e web_search tools |
+| Readability | `readability-lxml` | Extração de conteúdo de páginas web (web_fetch tool) |
 | Config | `PyYAML` | YAML legível para config de terminal |
 | Testes | `pytest` + `pytest-asyncio` + `pexpect` | TDD, testes PTY reais, testes WebSocket reais |
 | Empacotamento | `setuptools` (`setuptools.build_meta`) | entry point `forge_shell` via pip install -e . |
@@ -168,19 +199,26 @@ stdin (raw mode) ──► TerminalSession.run() [select loop]
                 │                            │
                 ▼                     ┌──────▼──────┐
            PTYEngine            NLInterceptor        │
-           /bin/bash            NLModeEngine          │
-                │               ForgeLLMAdapter ──► ForgeLLM
-                │               RiskEngine            │ (ollama/openai/...)
-                │               Redactor              │
+           /bin/bash            NLModeEngine ────────┤
+                │                 │          │       │
+                │          AgentService   Adapter    │
+                │          (tools+memory) (direct)   │
+                │                 │          │       │
+                │                 └────┬─────┘       │
+                │                      ▼             │
+                │               ForgeLLM             │
+                │               RiskEngine           │
+                │               Redactor             │
                 │                     └──────────────┘
                 │
                 ▼
-          stdout (display)
+     OutputRenderer (display)
                 │
           ┌─────┴──────┐
           │            │
-     AuditLogger   RelayBridge ──► HostRelayClient ──► RelayHandler ──► ViewerClient
-     (~/.forge_shell/audit/)                              (WebSocket)      (attach CLI)
+     AuditLogger   RelayBridge ──► relay.palhano.services ──► ViewerClient
+     (audit/)      ChatManager         (standalone)            AgentClient
+                   (split view)
 ```
 
 > Diagramas: `project/docs/diagrams/` (class · components · database · architecture)
@@ -189,7 +227,7 @@ stdin (raw mode) ──► TerminalSession.run() [select loop]
 
 ## Modo de Manutenção
 
-Este projeto está em **maintenance mode** após o MVP (6 ciclos, 362 testes passando). Novas features são adicionadas via:
+Este projeto está em **desenvolvimento ativo** (701+ testes passando). Novas features são adicionadas via:
 
 ```
 /feature <descrição da feature>
@@ -203,7 +241,8 @@ Ao finalizar uma feature (`/feature done`), SPEC.md é atualizado automaticament
 - Testes em `tests/unit/` (unitários, mocks) e `tests/smoke/` (processo real, PTY)
 - Testes E2E em `tests/e2e/cycle-XX/` com scripts bash + `run-all.sh`
 - Commits no formato `feat(cycle-XX): descrição` ou `feat(T-XX): descrição`
-- DI explícita em TerminalSession: `_interceptor`, `_auditor`, `_relay_bridge`, `_redactor` injetados após construção
+- DI explícita via constructor kwargs em TerminalSession, centralizada em `_build_session()` factory
+- Port ABCs em `src/application/ports/` definem contratos (LLMPort, AuditorPort, AgentPort, etc.)
 - ForgeLLMAdapter nunca lança exceção para o caller — retorna `None` em caso de falha
 - AlternateScreenDetector deve ser alimentado com todo output do PTY antes de qualquer decisão de roteamento
 - Redactor aplicado ao contexto LLM, nunca ao output do PTY em si
@@ -224,3 +263,10 @@ Ao finalizar uma feature (`/feature done`), SPEC.md é atualizado automaticament
 | 0.3.1 | 2026-02-26 | Diagramas (class, components, database, architecture) + SPEC.md | — |
 | 0.3.2 | 2026-02-26 | :help + :risk + Ctrl-C LLM cancel + múltiplos comandos + context injection (cwd+last_lines) + :explain streaming + SummarizeCompactor + symrouter | /feature |
 | 0.3.3 | 2026-02-26 | forge_shell config show/edit + attach --token + TLS relay (ssl_context + wss:// auto) + build distribuível (PyInstaller spec + pipx) | /feature |
+| 0.4.0 | 2026-02-26 | Machine code + senha de sessão + relay 3 camadas standalone + HTTP /health + rename sym_shell → forge_shell | /feature |
+| 0.4.1 | 2026-02-27 | Agent CLI role (forge_shell agent) + host recebe suggest cards | /feature |
+| 0.4.2 | 2026-02-27 | Chat split terminal (VTScreen + ChatPanel + SplitRenderer + F4 toggle) + chat protocol | /feature |
+| 0.4.3 | 2026-02-27 | Ctrl+X exit share + ANSI color fix split view + lazy chat activation | /feature |
+| 0.4.4 | 2026-03-01 | Refactor: OutputRenderer + ChatManager + Port ABCs + domain value objects + constructor DI + _build_session() | refactor |
+| 0.5.0 | 2026-03-01 | Agent system — 7 tools (filesystem, sonda, web) + AgentService + MemoryStore + AgentConfig | /feature |
+| 0.5.1 | 2026-03-01 | Fix: NLModeEngine respeita default_active do config | fix |
