@@ -40,7 +40,7 @@ class TestShareRelayWired:
         MockRB.return_value.start.assert_called()
 
     def test_share_injects_relay_bridge_into_session(self) -> None:
-        """share deve injetar _relay_bridge no TerminalSession."""
+        """share deve passar relay_bridge ao TerminalSession via construtor."""
         with patch("src.adapters.cli.main.SessionManager"), \
              patch("src.adapters.cli.main.ShareSession") as MockSS, \
              patch("src.adapters.cli.main.RelayBridge") as MockRB, \
@@ -58,7 +58,10 @@ class TestShareRelayWired:
             MockTS.return_value = mock_session
             from src.adapters.cli.main import main
             main(["share"])
-        assert mock_session._relay_bridge == MockRB.return_value
+        # relay_bridge agora é passado como kwarg no construtor
+        MockTS.assert_called_once()
+        call_kwargs = MockTS.call_args[1]
+        assert call_kwargs["relay_bridge"] == MockRB.return_value
 
     def test_share_shows_session_info(self, capsys) -> None:
         """share deve exibir machine_code e password."""

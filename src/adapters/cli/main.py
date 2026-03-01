@@ -199,6 +199,37 @@ def _build_ssl_server_context(cert_file: str | None, key_file: str | None):
     return ctx
 
 
+def _build_session(
+    config,
+    passthrough: bool = False,
+    relay_bridge=None,
+) -> TerminalSession:
+    """Constrói TerminalSession com todas as dependências injetadas."""
+    interceptor = None
+    auditor = None
+    redactor = None
+    if not passthrough:
+        adapter = ForgeLLMAdapter(
+            provider=config.llm.provider,
+            model=config.llm.model,
+            api_key=config.llm.api_key,
+            timeout_seconds=config.llm.timeout_seconds,
+            max_retries=config.llm.max_retries,
+        )
+        engine = NLModeEngine(llm_adapter=adapter, risk_engine=RiskEngine())
+        interceptor = NLInterceptor(nl_engine=engine)
+        auditor = AuditLogger()
+        redactor = Redactor.from_profile_name(config.redaction.default_profile)
+    return TerminalSession(
+        config=config,
+        passthrough=passthrough,
+        interceptor=interceptor,
+        auditor=auditor,
+        redactor=redactor,
+        relay_bridge=relay_bridge,
+    )
+
+
 def _config_show() -> int:
     """Exibe a configuração atual como YAML."""
     config = ConfigLoader().load()
@@ -311,19 +342,7 @@ def main(argv: list[str] | None = None) -> int:
         bridge.start()
 
         # Iniciar sessão normal com relay_bridge injetado
-        session = TerminalSession(config=config, passthrough=False)
-        adapter = ForgeLLMAdapter(
-            provider=config.llm.provider,
-            model=config.llm.model,
-            api_key=config.llm.api_key,
-            timeout_seconds=config.llm.timeout_seconds,
-            max_retries=config.llm.max_retries,
-        )
-        engine = NLModeEngine(llm_adapter=adapter, risk_engine=RiskEngine())
-        session._interceptor = NLInterceptor(nl_engine=engine)
-        session._auditor = AuditLogger()
-        session._relay_bridge = bridge
-        session._redactor = Redactor.from_profile_name(config.redaction.default_profile)
+        session = _build_session(config, relay_bridge=bridge)
 
         session._write_startup_hint()
         rc = session.run()
@@ -418,22 +437,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # --passthrough ou modo padrão (NL Mode)
     config = ConfigLoader().load()
-    session = TerminalSession(config=config, passthrough=args.passthrough)
-
-    if not args.passthrough:
-        # injetar NLInterceptor com ForgeLLMAdapter real
-        adapter = ForgeLLMAdapter(
-            provider=config.llm.provider,
-            model=config.llm.model,
-            api_key=config.llm.api_key,
-            timeout_seconds=config.llm.timeout_seconds,
-            max_retries=config.llm.max_retries,
-        )
-        engine = NLModeEngine(llm_adapter=adapter, risk_engine=RiskEngine())
-        session._interceptor = NLInterceptor(nl_engine=engine)
-        # injetar AuditLogger e Redactor
-        session._auditor = AuditLogger()
-        session._redactor = Redactor.from_profile_name(config.redaction.default_profile)
+    session = _build_session(config, passthrough=args.passthrough)
 
     session._write_startup_hint()
     return session.run()

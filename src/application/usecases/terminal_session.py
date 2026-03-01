@@ -23,12 +23,14 @@ import time
 from collections import deque
 from enum import Enum
 
-# Log de timing para diagnóstico — escreve em /tmp/forge_shell_timing.log
+# Log de timing para diagnóstico — arquivo por PID em /tmp/
 import logging
+import tempfile
 _tlog = logging.getLogger("forge_shell.timing")
 _tlog.setLevel(logging.DEBUG)
 _tlog.propagate = False  # não vaza para o root logger (evita eco no PTY)
-_th = logging.FileHandler("/tmp/forge_shell_timing.log", mode="w")
+_log_path = os.path.join(tempfile.gettempdir(), f"forge_shell_timing_{os.getpid()}.log")
+_th = logging.FileHandler(_log_path, mode="w")
 _th.setFormatter(logging.Formatter("%(asctime)s.%(msecs)03d  %(message)s", datefmt="%H:%M:%S"))
 _tlog.addHandler(_th)
 
@@ -65,6 +67,11 @@ class TerminalSession:
         self,
         config: ForgeShellConfig,
         passthrough: bool = False,
+        *,
+        interceptor=None,
+        auditor=None,
+        redactor=None,
+        relay_bridge=None,
     ) -> None:
         self.config = config
 
@@ -77,9 +84,9 @@ class TerminalSession:
 
         self._engine = PTYEngine()
         self._detector = AlternateScreenDetector()
-        self._interceptor = None    # injetado após construção (lazy / DI)
-        self._auditor = None        # injetado via DI; None = sem auditoria
-        self._relay_bridge = None   # injetado via DI; None = sem relay streaming
+        self._interceptor = interceptor
+        self._auditor = auditor
+        self._relay_bridge = relay_bridge
         self._stdout = None         # injetado para testes; padrão: sys.stdout.buffer
         self._nl_buffer: bytes = b""  # buffer de linha no NL Mode
         self._llm_queue: queue.Queue = queue.Queue()  # resultados assíncronos do LLM
@@ -90,7 +97,7 @@ class TerminalSession:
         # contexto LLM: últimas N linhas de output e cwd
         self._output_lines: deque = deque(maxlen=config.nl_mode.context_lines)
         self._output_partial: str = ""
-        self._redactor = None  # injetado via DI; None = sem redaction
+        self._redactor = redactor
         # Chat panel (Phase 3) — delegado ao ChatManager
         self._chat = ChatManager(self._engine, self._get_terminal_size)
         self._renderer = OutputRenderer(self._engine)
