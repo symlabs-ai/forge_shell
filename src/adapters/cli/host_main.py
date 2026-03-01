@@ -48,9 +48,7 @@ def _relay_url_with_tls(url: str, tls: bool) -> str:
 def _build_ssl_client_context(tls: bool):
     if not tls:
         return None
-    ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_CLIENT)
-    ctx.load_default_certs()
-    return ctx
+    return _ssl.create_default_context()
 
 
 def main(argv: list[str] | None = None) -> int:
