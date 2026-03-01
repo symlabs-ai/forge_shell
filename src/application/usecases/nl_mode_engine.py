@@ -54,11 +54,12 @@ class NLModeEngine:
         llm_adapter: ForgeLLMAdapter,
         risk_engine: RiskEngine,
         agent_service: AgentPort | None = None,
+        default_active: bool = True,
     ) -> None:
         self._adapter = llm_adapter
         self._risk = risk_engine
         self._agent = agent_service
-        self._state = NLModeState.NL_ACTIVE
+        self._state = NLModeState.NL_ACTIVE if default_active else NLModeState.BASH_ACTIVE
 
     @property
     def state(self) -> NLModeState:

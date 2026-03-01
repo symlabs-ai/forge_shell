@@ -229,6 +229,7 @@ def _build_session(
             llm_adapter=adapter,
             risk_engine=RiskEngine(),
             agent_service=agent_service,
+            default_active=config.nl_mode.default_active,
         )
         interceptor = NLInterceptor(nl_engine=engine)
         auditor = AuditLogger()
