@@ -21,6 +21,14 @@
         "tests/unit/test_tls_relay.py",
         "tests/unit/test_build_artifacts.py"
       ]
+    },
+    {
+      "id": "a48d6de1-905e-400b-9d96-5c40ab893a0d",
+      "feature": "refactor: Decompose TerminalSession",
+      "status": "in_progress",
+      "started": "2026-03-01T12:00:00Z",
+      "branch": "main",
+      "files": []
     }
   ]
 }

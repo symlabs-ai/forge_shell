@@ -40,18 +40,10 @@ from src.infrastructure.terminal_engine.pty_engine import PTYEngine
 from src.infrastructure.terminal_engine.alternate_screen import AlternateScreenDetector
 from src.application.usecases.nl_interceptor import InterceptAction
 
-# Chat panel imports (soft dependency on pyte)
-try:
-    from src.infrastructure.terminal_engine.vt_screen import VTScreen, PYTE_AVAILABLE
-except ImportError:
-    PYTE_AVAILABLE = False
-    VTScreen = None  # type: ignore
-
-from src.infrastructure.terminal_engine.chat_panel import ChatPanel
-from src.infrastructure.terminal_engine.split_renderer import SplitRenderer, MIN_SPLIT_COLS
-from src.infrastructure.terminal_engine.input_router import InputRouter, InputFocus
-
-_CHAT_WIDTH = 30
+from src.infrastructure.terminal_engine.split_renderer import MIN_SPLIT_COLS
+from src.infrastructure.terminal_engine.input_router import InputFocus
+from src.application.usecases.output_renderer import OutputRenderer
+from src.application.usecases.chat_manager import ChatManager
 
 
 class SessionMode(str, Enum):
@@ -99,13 +91,9 @@ class TerminalSession:
         self._output_lines: deque = deque(maxlen=config.nl_mode.context_lines)
         self._output_partial: str = ""
         self._redactor = None  # injetado via DI; None = sem redaction
-        # Chat panel state (Phase 3)
-        self._vt_screen = None          # VTScreen | None
-        self._chat_panel = None         # ChatPanel | None
-        self._split_renderer = None     # SplitRenderer | None
-        self._input_router = None       # InputRouter | None
-        self._chat_active = False       # split view ativo?
-        self._alt_screen_was_active = False  # track alternate screen transitions
+        # Chat panel (Phase 3) — delegado ao ChatManager
+        self._chat = ChatManager(self._engine, self._get_terminal_size)
+        self._renderer = OutputRenderer(self._engine)
 
     def _flush_pending_llm(self, timeout: float = 0.5) -> None:
         """Drena resultado pendente do LLM. Usado em testes (sem select loop)."""
@@ -121,7 +109,7 @@ class TerminalSession:
         return self._mode
 
     # ------------------------------------------------------------------
-    # Chat panel management (Phase 3)
+    # Chat panel management (delegado ao ChatManager)
     # ------------------------------------------------------------------
 
     def _get_terminal_size(self) -> tuple[int, int]:
@@ -133,80 +121,60 @@ class TerminalSession:
         except Exception:
             return (24, 80)
 
+    def _sync_chat(self) -> None:
+        """Sync ChatManager references (needed when tests replace fields)."""
+        self._chat._stdout = self._stdout
+        self._chat._engine = self._engine
+        self._chat._get_terminal_size = self._get_terminal_size
+
     def _activate_chat_panel(self) -> None:
-        """Activate split view with VTScreen + ChatPanel + SplitRenderer."""
-        if not PYTE_AVAILABLE:
-            _tlog.debug("chat: pyte not available, skipping activation")
-            return
-
-        rows, cols = self._get_terminal_size()
-        if cols < MIN_SPLIT_COLS:
-            _tlog.debug("chat: terminal too narrow (%d cols), skipping", cols)
-            return
-
-        out = self._stdout or getattr(sys.stdout, "buffer", None)
-        if out is None:
-            return
-
-        left_cols = cols - _CHAT_WIDTH - 1
-
-        self._vt_screen = VTScreen(rows, left_cols)
-        self._chat_panel = ChatPanel(rows, _CHAT_WIDTH)
-        self._split_renderer = SplitRenderer(out, rows, cols, chat_width=_CHAT_WIDTH)
-        self._split_renderer.attach(self._vt_screen, self._chat_panel)
-        self._input_router = InputRouter()
-        self._chat_active = True
-
-        # Resize PTY to left pane width
-        self._engine.resize(rows, left_cols)
-
-        # Force initial render
-        self._split_renderer.render(force=True)
-        _tlog.debug("chat: activated (left=%d, right=%d)", left_cols, _CHAT_WIDTH)
+        self._sync_chat()
+        self._chat.activate()
 
     def _deactivate_chat_panel(self) -> None:
-        """Deactivate split view, restore full-screen terminal."""
-        if not self._chat_active:
-            return
-
-        if self._split_renderer:
-            self._split_renderer.detach()
-
-        self._vt_screen = None
-        self._chat_panel = None
-        self._split_renderer = None
-        self._input_router = None
-        self._chat_active = False
-
-        # Restore PTY to full terminal width
-        rows, cols = self._get_terminal_size()
-        self._engine.resize(rows, cols)
-        _tlog.debug("chat: deactivated, PTY full-screen (%dx%d)", rows, cols)
+        self._sync_chat()
+        self._chat.deactivate()
 
     def _handle_chat_message(self, payload: dict) -> None:
-        """Handle incoming chat message from relay."""
-        if not self._chat_active:
-            self._activate_chat_panel()
-        if self._chat_panel is None:
-            return
-        sender = payload.get("sender", "?")
-        text = payload.get("text", "")
-        role = payload.get("role", sender)
-        self._chat_panel.add_message(sender, text, role)
-        if self._split_renderer:
-            self._split_renderer.render()
+        self._sync_chat()
+        self._chat.handle_message(payload)
 
     def _send_chat_message(self, text: str) -> None:
-        """Send chat message via relay and add to local panel."""
-        if self._chat_panel is not None:
-            self._chat_panel.add_message("host", text, "host")
-        if self._relay_bridge is not None:
-            try:
-                self._relay_bridge.send_chat(text, sender="host")
-            except Exception:
-                pass
-        if self._split_renderer:
-            self._split_renderer.render()
+        self._sync_chat()
+        self._chat.send_message(text, relay_bridge=self._relay_bridge)
+
+    # Compatibility properties — delegate to ChatManager fields
+    @property
+    def _chat_active(self) -> bool:
+        return self._chat.active
+
+    @_chat_active.setter
+    def _chat_active(self, value: bool) -> None:
+        self._chat.active = value
+
+    @property
+    def _vt_screen(self):
+        return self._chat.vt_screen
+
+    @property
+    def _chat_panel(self):
+        return self._chat.chat_panel
+
+    @property
+    def _split_renderer(self):
+        return self._chat.split_renderer
+
+    @property
+    def _input_router(self):
+        return self._chat.input_router
+
+    @property
+    def _alt_screen_was_active(self) -> bool:
+        return self._chat.alt_screen_was_active
+
+    @_alt_screen_was_active.setter
+    def _alt_screen_was_active(self, value: bool) -> None:
+        self._chat.alt_screen_was_active = value
 
     # ------------------------------------------------------------------
     # I/O routing (testável sem I/O real)
@@ -374,182 +342,31 @@ class TerminalSession:
             out.write(data)
             out.flush()
 
+    def _sync_renderer(self) -> None:
+        """Sync renderer references (needed when tests replace _engine/_stdout)."""
+        self._renderer._stdout = self._stdout
+        self._renderer._engine = self._engine
+
     def _handle_intercept_result(self, result) -> None:
-        """Processar resultado do NLInterceptor: executar comando, exibir sugestão ou indicador."""
-        if result is None:
-            return
-        out = self._stdout or getattr(sys.stdout, "buffer", None)
+        """Processar resultado do NLInterceptor (delega ao OutputRenderer)."""
+        self._sync_renderer()
+        self._renderer.handle_intercept_result(
+            result,
+            mode=self._mode,
+            set_mode=self._set_mode,
+            set_pty_running=self._set_pty_running,
+        )
 
-        if result.action == InterceptAction.NOOP:
-            return
+    def _set_mode(self, new_mode: SessionMode) -> None:
+        self._mode = new_mode
 
-        if result.action == InterceptAction.EXEC_BASH:
-            cmd = (result.bash_command or "").strip()
-            if cmd:
-                self._engine.write(cmd.encode() + b"\n")
-                # comando está rodando — input direto ao PTY (ex: senha de sudo)
-                self._pty_running = True
-            return
-
-        if result.action == InterceptAction.TOGGLE:
-            # alternar _mode e exibir indicador do novo estado
-            if self._mode == SessionMode.NL:
-                self._mode = SessionMode.BASH
-                label = b"Bash Mode ativo"
-            else:
-                self._mode = SessionMode.NL
-                label = b"NL Mode ativo"
-            indicator = b"\r\n\033[33m[forge_shell: " + label + b"]\033[0m\r\n"
-            if out:
-                out.write(indicator)
-                out.flush()
-            # Envia \r ao PTY para forçar novo prompt do bash (sem isso o usuário
-            # fica aguardando o prompt que nunca aparece automaticamente)
-            self._pty_running = True
-            self._engine.write(b"\r")
-            return
-
-        if result.action == InterceptAction.HELP:
-            lines = [
-                b"\r\n",
-                b"\033[1;36mforge_shell\033[0m \xe2\x80\x94 comandos dispon\xc3\xadveis\r\n",
-                b"\r\n",
-                b"  \033[33m!\033[0m              alternar NL Mode \xe2\x86\x94 Bash Mode\r\n",
-                b"  \033[33m!<cmd>\033[0m         executar bash direto (ex: \033[2m!ls -la\033[0m)\r\n",
-                b"  \033[33m:explain <cmd>\033[0m analisar comando sem executar\r\n",
-                b"  \033[33m:risk <cmd>\033[0m    classificar risco de um comando\r\n",
-                b"  \033[33m:help\033[0m          exibir esta ajuda\r\n",
-                b"\r\n",
-                b"  \033[2mNL Mode:\033[0m descreva em portugu\xc3\xaas \xe2\x86\x92 forge_shell gera o comando\r\n",
-                b"  \033[2mCtrl-C:\033[0m cancela consulta LLM em andamento\r\n",
-                b"\r\n",
-            ]
-            if out:
-                for line in lines:
-                    out.write(line)
-                out.flush()
-            return
-
-        if result.action == InterceptAction.RISK:
-            level = result.risk_level
-            level_str = level.value if level is not None else "unknown"
-            if level_str == "low":
-                color = b"\033[1;32m"   # verde
-            elif level_str == "medium":
-                color = b"\033[1;33m"   # amarelo
-            else:
-                color = b"\033[1;31m"   # vermelho
-            if out:
-                out.write(b"\r\n  Risco: " + color + level_str.upper().encode() + b"\033[0m\r\n\r\n")
-                out.flush()
-            return
-
-        if result.action == InterceptAction.EXPLAIN:
-            suggestion = result.suggestion
-            if suggestion is None:
-                return
-            explanation = getattr(suggestion, "explanation", "") or ""
-            commands = getattr(suggestion, "commands", []) or []
-            risk = getattr(suggestion, "risk_level", None)
-            risk_str = risk.value if hasattr(risk, "value") else str(risk)
-            lines = [b"\r\n"]
-            if commands:
-                cmd_str = " && ".join(commands)
-                lines.append(b"\033[1;34m[?] " + cmd_str.encode() + b"\033[0m\r\n")
-            if explanation:
-                lines.append(b"   " + explanation.encode() + b"\r\n")
-            lines.append(b"   Risco: " + risk_str.encode() + b"\r\n\r\n")
-            if out:
-                for line in lines:
-                    out.write(line)
-                out.flush()
-            return
-
-        if result.action == InterceptAction.SHOW_SUGGESTION:
-            suggestion = result.suggestion
-            if suggestion is None:
-                return
-            commands = getattr(suggestion, "commands", []) or []
-            explanation = getattr(suggestion, "explanation", "") or ""
-            risk = getattr(suggestion, "risk_level", None)
-            risk_str = risk.value if hasattr(risk, "value") else str(risk)
-
-            requires_confirm = getattr(result, "requires_double_confirm", False)
-
-            # formatar sugestão para o terminal (todos os comandos, join com &&)
-            cmd_str = " && ".join(commands) if commands else ""
-            lines = [b"\r\n"]
-            if cmd_str:
-                lines.append(b"\033[1;32m[*] " + cmd_str.encode() + b"\033[0m\r\n")
-            if explanation:
-                lines.append(b"   " + explanation.encode() + b"\r\n")
-            lines.append(b"   Risco: " + risk_str.encode() + b"\r\n")
-
-            if requires_confirm:
-                lines.append(b"\r\n")
-                lines.append(b"\033[1;31m[!] Risco ALTO \xe2\x80\x94 confirme digitando o comando manualmente.\033[0m\r\n")
-                lines.append(b"\r\n")
-            else:
-                lines.append(b"\033[2m   Enter para executar  \xc2\xb7  Ctrl-C para cancelar\033[0m\r\n")
-                lines.append(b"\r\n")
-
-            if out:
-                for line in lines:
-                    out.write(line)
-                out.flush()
-
-            if not requires_confirm and cmd_str:
-                # risco baixo/médio: injeta no PTY para o usuário revisar e pressionar Enter
-                self._engine.write(cmd_str.encode())
-            return
-
-    # ------------------------------------------------------------------
-    # Agent suggest display
-    # ------------------------------------------------------------------
+    def _set_pty_running(self, value: bool) -> None:
+        self._pty_running = value
 
     def _handle_agent_suggest(self, payload: dict) -> None:
-        """Renderiza sugestão recebida de um agent remoto."""
-        out = self._stdout or getattr(sys.stdout, "buffer", None)
-        if out is None:
-            return
-
-        commands = payload.get("commands", [])
-        explanation = payload.get("explanation", "")
-        risk_level = payload.get("risk_level", "LOW").upper()
-
-        # Cor do risco
-        if risk_level == "LOW":
-            risk_color = b"\033[1;32m"   # verde
-        elif risk_level == "MEDIUM":
-            risk_color = b"\033[1;33m"   # amarelo
-        else:
-            risk_color = b"\033[1;31m"   # vermelho
-
-        cmd_str = " && ".join(commands) if commands else ""
-
-        lines = [b"\r\n"]
-        # Prefix [Agent] em magenta
-        lines.append(b"\033[1;35m[Agent]\033[0m ")
-        if cmd_str:
-            lines.append(cmd_str.encode() + b"\r\n")
-        if explanation:
-            lines.append(b"   " + explanation.encode() + b"\r\n")
-        lines.append(b"   Risco: " + risk_color + risk_level.encode() + b"\033[0m\r\n")
-
-        if risk_level in ("LOW", "MEDIUM"):
-            lines.append(b"\033[2m   Enter para executar  \xc2\xb7  Ctrl-C para cancelar\033[0m\r\n")
-        else:
-            lines.append(b"\033[1;31m   [!] Risco ALTO \xe2\x80\x94 digite o comando manualmente.\033[0m\r\n")
-
-        lines.append(b"\r\n")
-
-        for line in lines:
-            out.write(line)
-        out.flush()
-
-        # LOW/MEDIUM: injeta comando no PTY para user revisar (Enter para executar)
-        if risk_level in ("LOW", "MEDIUM") and cmd_str:
-            self._engine.write(cmd_str.encode())
+        """Renderiza sugestão recebida de um agent remoto (delega ao OutputRenderer)."""
+        self._sync_renderer()
+        self._renderer.handle_agent_suggest(payload)
 
     # ------------------------------------------------------------------
     # Context helpers
@@ -590,23 +407,9 @@ class TerminalSession:
         return ctx
 
     def _write_startup_hint(self) -> None:
-        """Exibir hint de NL Mode na abertura da sessão (apenas modo NL/BASH)."""
-        if self._mode == SessionMode.PASSTHROUGH:
-            return
-        out = self._stdout or getattr(sys.stdout, "buffer", None)
-        if out is None:
-            return
-        hint = (
-            b"\033[36mforge_shell\033[0m"
-            b"  |  \033[1mNL Mode\033[0m"
-            b"  |  \033[33m!\033[0m para bash"
-            b"  |  \033[33m!<cmd>\033[0m bash direto"
-            b"  |  \033[33m:explain <cmd>\033[0m analisar"
-            b"  |  \033[33m:risk <cmd>\033[0m risco"
-            b"  |  \033[33m:help\033[0m ajuda"
-            b"\r\n"
-        )
-        out.write(hint)
+        """Exibir hint de NL Mode na abertura da sessão (delega ao OutputRenderer)."""
+        self._sync_renderer()
+        self._renderer.write_startup_hint(self._mode)
 
     _PROMPT_PATTERN = re.compile(rb'[\$#%]\s*$')
     # Detecta prompts de senha do sudo/ssh/su/doas
@@ -624,26 +427,11 @@ class TerminalSession:
 
         # Handle alternate screen transitions when chat is active
         if self._chat_active:
+            self._sync_chat()
             if not prev_alt and curr_alt:
-                # Entering alternate screen (vim, top): hide chat, go full-width
-                self._alt_screen_was_active = True
-                if self._split_renderer:
-                    self._split_renderer.detach()
-                rows, cols = self._get_terminal_size()
-                self._engine.resize(rows, cols)
+                self._chat.handle_enter_alt_screen()
             elif prev_alt and not curr_alt and self._alt_screen_was_active:
-                # Exiting alternate screen: restore split
-                self._alt_screen_was_active = False
-                rows, cols = self._get_terminal_size()
-                if self._vt_screen and self._chat_panel and self._split_renderer:
-                    out = self._stdout or getattr(sys.stdout, "buffer", None)
-                    left_cols = cols - _CHAT_WIDTH - 1
-                    self._vt_screen.resize(rows, left_cols)
-                    self._chat_panel.resize(rows, _CHAT_WIDTH)
-                    self._split_renderer = SplitRenderer(out, rows, cols, chat_width=_CHAT_WIDTH)
-                    self._split_renderer.attach(self._vt_screen, self._chat_panel)
-                    self._engine.resize(rows, left_cols)
-                    self._split_renderer.render(force=True)
+                self._chat.handle_exit_alt_screen()
 
         # Detecta prompt bash/zsh/fish no output → comando terminou, volta ao NL buffer
         if self._pty_running:
@@ -704,18 +492,9 @@ class TerminalSession:
         def _handler(signum: int, frame: object) -> None:
             try:
                 rows, cols = self._get_terminal_size()
-                if self._chat_active and cols >= MIN_SPLIT_COLS:
-                    left_cols = cols - _CHAT_WIDTH - 1
-                    if self._vt_screen:
-                        self._vt_screen.resize(rows, left_cols)
-                    if self._chat_panel:
-                        self._chat_panel.resize(rows, _CHAT_WIDTH)
-                    if self._split_renderer:
-                        self._split_renderer.resize(rows, cols)
-                    self._engine.resize(rows=rows, cols=left_cols)
-                elif self._chat_active and cols < MIN_SPLIT_COLS:
-                    # Terminal too narrow — deactivate chat
-                    self._deactivate_chat_panel()
+                if self._chat_active:
+                    self._sync_chat()
+                    self._chat.handle_resize(rows, cols)
                 else:
                     self._engine.resize(rows=rows, cols=cols)
             except Exception:
