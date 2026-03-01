@@ -44,6 +44,10 @@ from src.infrastructure.collab.relay_handler import RelayHandler
 from src.infrastructure.collab.relay_bridge import RelayBridge
 from src.infrastructure.collab.agent_client import AgentClient
 from src.infrastructure.intelligence.redaction import Redactor
+from src.infrastructure.terminal_engine.vt_screen import VTScreen
+from src.infrastructure.terminal_engine.chat_panel import ChatPanel
+from src.infrastructure.terminal_engine.split_renderer import SplitRenderer
+from src.infrastructure.terminal_engine.input_router import InputRouter
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -291,6 +295,112 @@ def _config_edit() -> int:
     return result.returncode
 
 
+class _ViewerSession:
+    """Manages viewer attach state with optional chat split (F4)."""
+
+    def __init__(self, viewer, stdout):
+        self._viewer = viewer
+        self._stdout = stdout
+        self._chat_active = False
+        self._vt: VTScreen | None = None
+        self._chat: ChatPanel | None = None
+        self._renderer: SplitRenderer | None = None
+        self._router: InputRouter = InputRouter()
+
+    # -- callbacks for ViewerClient --
+
+    def on_output(self, data: bytes) -> None:
+        if self._chat_active and self._vt and self._renderer:
+            self._vt.feed(data)
+            self._renderer.render()
+        else:
+            self._stdout.write(data)
+            self._stdout.flush()
+
+    def on_chat(self, payload: dict) -> None:
+        if not self._chat_active:
+            self._activate_chat()
+        sender = payload.get("sender", "?")
+        text = payload.get("text", "")
+        role = payload.get("sender", "viewer")
+        if self._chat:
+            self._chat.add_message(sender, text, role)
+        if self._renderer:
+            self._renderer.render()
+
+    # -- chat split management --
+
+    def _get_terminal_size(self) -> tuple[int, int]:
+        try:
+            size = os.get_terminal_size()
+            return (size.lines, size.columns)
+        except OSError:
+            return (24, 80)
+
+    def _activate_chat(self) -> None:
+        rows, cols = self._get_terminal_size()
+        chat_width = 30
+        left_cols = max(1, cols - chat_width - 1)
+        self._vt = VTScreen(rows, left_cols)
+        self._chat = ChatPanel(rows, chat_width)
+        self._renderer = SplitRenderer(self._stdout, rows, cols, chat_width=chat_width)
+        self._renderer.attach(self._vt, self._chat)
+        self._renderer.set_focus("terminal")
+        self._chat_active = True
+        self._renderer.render(force=True)
+
+    def _deactivate_chat(self) -> None:
+        if self._renderer:
+            self._renderer.detach()
+        self._vt = None
+        self._chat = None
+        self._renderer = None
+        self._chat_active = False
+
+    def handle_resize(self) -> None:
+        if not self._chat_active:
+            return
+        rows, cols = self._get_terminal_size()
+        chat_width = 30
+        left_cols = max(1, cols - chat_width - 1)
+        if self._vt:
+            self._vt.resize(rows, left_cols)
+        if self._chat:
+            self._chat.resize(rows, chat_width)
+        if self._renderer:
+            self._renderer.resize(rows, cols)
+            self._renderer.render(force=True)
+
+    # -- input routing --
+
+    async def handle_input(self, data: bytes) -> None:
+        for target, chunk in self._router.feed(data):
+            if target == "toggle":
+                if not self._chat_active:
+                    self._activate_chat()
+                else:
+                    self._router.toggle_focus()
+                    if self._renderer:
+                        self._renderer.set_focus(self._router.focus.value)
+                        self._renderer.render(force=True)
+            elif target == "terminal":
+                await self._viewer.send_input(chunk)
+            elif target == "chat":
+                if self._chat:
+                    # handle_key expects individual keystrokes, feed byte by byte
+                    for i in range(len(chunk)):
+                        key = chunk[i:i + 1]
+                        msg = self._chat.handle_key(key)
+                        if msg is not None:
+                            await self._viewer.send_chat(msg, sender="viewer")
+                            self._chat.add_message("eu", msg, "viewer")
+                if self._renderer:
+                    self._renderer.render()
+
+    def flush_esc_buffer(self) -> list[tuple[str, bytes]]:
+        return self._router.flush_esc_buffer()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -364,13 +474,14 @@ def main(argv: list[str] | None = None) -> int:
         return rc
 
     if args.command == "attach":
+        import signal
         import termios
         import tty
 
         config = ConfigLoader().load()
         relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
         print(f"[forge_shell] Conectando à máquina: {args.machine_code}")
-        print(f"[forge_shell] Use Ctrl+] para desconectar")
+        print(f"[forge_shell] Use Ctrl+] para desconectar | F4 para chat")
         ssl_ctx = _build_ssl_client_context(config.relay.tls)
         viewer = ViewerClient(
             relay_url=relay_url,
@@ -379,29 +490,48 @@ def main(argv: list[str] | None = None) -> int:
             ssl=ssl_ctx,
         )
 
-        def _on_viewer_output(data: bytes) -> None:
-            sys.stdout.buffer.write(data)
-            sys.stdout.buffer.flush()
-
         is_tty = sys.stdin.isatty()
+        session = _ViewerSession(viewer, sys.stdout.buffer)
 
         async def _viewer_loop() -> None:
-            await viewer.connect(on_output=_on_viewer_output)
+            await viewer.connect(
+                on_output=session.on_output,
+                on_chat=session.on_chat,
+            )
+
+            # SIGWINCH handler for terminal resize
+            if is_tty:
+                loop = asyncio.get_event_loop()
+                loop.add_signal_handler(signal.SIGWINCH, session.handle_resize)
+
             if is_tty:
                 loop = asyncio.get_event_loop()
                 try:
                     while True:
-                        data = await loop.run_in_executor(None, lambda: os.read(sys.stdin.fileno(), 1024))
+                        try:
+                            data = await asyncio.wait_for(
+                                loop.run_in_executor(None, lambda: os.read(sys.stdin.fileno(), 1024)),
+                                timeout=0.05,
+                            )
+                        except asyncio.TimeoutError:
+                            # Flush escape buffer on timeout (lone ESC)
+                            for target, chunk in session.flush_esc_buffer():
+                                if target == "terminal":
+                                    await viewer.send_input(chunk)
+                                elif target == "chat" and session._chat:
+                                    session._chat.handle_key(chunk)
+                                    if session._renderer:
+                                        session._renderer.render()
+                            continue
                         if not data:
                             break
-                        # Ctrl+] (0x1d) — escape to disconnect (telnet convention)
+                        # Ctrl+] (0x1d) — escape to disconnect
                         if b"\x1d" in data:
                             break
-                        await viewer.send_input(data)
+                        await session.handle_input(data)
                 except (KeyboardInterrupt, asyncio.CancelledError, OSError):
                     pass
             else:
-                # non-TTY (tests, piped stdin): fallback to wait-only mode
                 try:
                     await viewer.wait()
                 except (KeyboardInterrupt, asyncio.CancelledError):
