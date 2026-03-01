@@ -7,7 +7,8 @@ NL Mode possa exigir confirmação adequada antes de executar.
 from __future__ import annotations
 
 import re
-from src.infrastructure.intelligence.nl_response import RiskLevel
+from src.domain.value_objects import RiskLevel
+from src.application.ports import RiskEnginePort
 
 # ---------------------------------------------------------------------------
 # Padrões de risco ALTO — deleção irreversível / formatação / sistema crítico
@@ -52,7 +53,7 @@ _MEDIUM_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 
-class RiskEngine:
+class RiskEngine(RiskEnginePort):
     """Classifica o nível de risco de um comando Bash."""
 
     def classify(self, command: str) -> RiskLevel:

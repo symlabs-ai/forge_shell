@@ -21,7 +21,8 @@ from collections.abc import Callable
 
 from forge_llm import ChatAgent, ChatConfig, ChatMessage, SummarizeCompactor
 
-from src.infrastructure.intelligence.nl_response import NLResponse, RiskLevel
+from src.domain.value_objects import NLResponse, RiskLevel
+from src.application.ports import LLMPort
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ NÃO execute o comando. Apenas analise e explique.
 """
 
 
-class ForgeLLMAdapter:
+class ForgeLLMAdapter(LLMPort):
     """
     Adapter para ForgeLLM com histórico multi-turn e streaming.
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from src.application.ports import AuditorPort
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -45,7 +46,7 @@ class AuditRecord:
         return f"[{ts}] {self.action} origin={self.origin} {detail_str}"
 
 
-class AuditLogger:
+class AuditLogger(AuditorPort):
     """
     Logger de auditoria para sessão forge_shell.
 

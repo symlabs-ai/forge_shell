@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
+from src.application.ports import RedactorPort
 
 _MASK = "[REDACTED]"
 
@@ -41,7 +42,7 @@ _PROFILE_PATTERNS: dict[RedactionProfile, list[re.Pattern[str]]] = {
 }
 
 
-class Redactor:
+class Redactor(RedactorPort):
     """Mascara segredos em texto usando padrões regex do perfil configurado."""
 
     def __init__(self, profile: RedactionProfile = RedactionProfile.PROD) -> None:
