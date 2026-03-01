@@ -33,6 +33,18 @@
         "src/application/usecases/output_renderer.py",
         "src/application/usecases/chat_manager.py"
       ]
+    },
+    {
+      "id": "03167676-c3b5-460c-92bc-339dcc7c9551",
+      "feature": "refactor: Constructor DI + PID-based logging",
+      "status": "completed",
+      "started": "2026-03-01T14:00:00Z",
+      "branch": "main",
+      "files": [
+        "src/application/usecases/terminal_session.py",
+        "src/adapters/cli/main.py",
+        "tests/unit/test_c6t04_share_relay.py"
+      ]
     }
   ]
 }
