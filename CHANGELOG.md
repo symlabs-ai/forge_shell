@@ -4,6 +4,19 @@ Todas as mudanças notáveis do forge_shell são documentadas aqui.
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [0.5.4] - 2026-03-01
+
+### Added
+- **Bidirectional input (co-control)** — viewers e agents podem enviar keystrokes para o PTY do host via relay
+  - `TERMINAL_INPUT` message type no protocolo relay
+  - `send_input(data)` em ViewerClient e AgentClient
+  - `on_input` callback em HostRelayClient
+  - Input queue no RelayBridge com `get_input()` sync
+  - Drain de input remoto no I/O loop do TerminalSession
+- **`forge_shell attach` bidirecional** — raw mode stdin, keystrokes vão para o host, Ctrl+] desconecta
+- **Agent CLI suporta input direto** — `{"type":"input","data":"<base64>"}` via JSON stdin
+- `can_inject_input()` habilitado para participantes autenticados (co-control)
+
 ## [0.5.1] - 2026-03-01
 
 ### Fixed
