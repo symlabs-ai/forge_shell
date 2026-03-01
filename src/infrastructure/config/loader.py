@@ -67,12 +67,26 @@ class CollabConfig:
 
 
 @dataclass
+class AgentConfig:
+    """Configuração do agent system (NL Mode com tools)."""
+    enabled: bool = False
+    max_tool_rounds: int = 15
+    exec_timeout: int = 60
+    exec_deny_patterns: list[str] = field(default_factory=list)
+    memory_enabled: bool = True
+    memory_consolidate_every: int = 10
+    brave_api_key: str | None = None
+    web_fetch_max_chars: int = 50000
+
+
+@dataclass
 class ForgeShellConfig:
     nl_mode: NLModeConfig = field(default_factory=NLModeConfig)
     redaction: RedactionConfig = field(default_factory=RedactionConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     relay: RelayConfig = field(default_factory=RelayConfig)
     collab: CollabConfig = field(default_factory=CollabConfig)
+    agent: AgentConfig = field(default_factory=AgentConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +155,16 @@ collab:
 
 redaction:
   default_profile: prod        # dev (permissivo) | prod (restritivo)
+
+agent:
+  enabled: false               # ativa agent system com tools (read_file, sonda, web_search, etc.)
+  max_tool_rounds: 15          # máximo de rodadas de tool calling por query
+  exec_timeout: 60             # timeout do SondaTool (exec silencioso) em segundos
+  # exec_deny_patterns: []     # padrões regex extras para bloquear comandos (além dos defaults)
+  memory_enabled: true         # memória persistente entre sessões (~/.forge_shell/agent/memory/)
+  memory_consolidate_every: 10 # consolida memória a cada N interações
+  brave_api_key: null          # chave Brave Search API (ou variável BRAVE_API_KEY)
+  web_fetch_max_chars: 50000   # máximo de caracteres extraídos por web_fetch
 """
 
 
@@ -229,4 +253,19 @@ class ConfigLoader:
             permanent_password=collab_raw.get("permanent_password", None),
         )
 
-        return ForgeShellConfig(nl_mode=nl_mode, redaction=redaction, llm=llm, relay=relay, collab=collab)
+        agent_raw = raw.get("agent", {})
+        agent = AgentConfig(
+            enabled=agent_raw.get("enabled", False),
+            max_tool_rounds=agent_raw.get("max_tool_rounds", 15),
+            exec_timeout=agent_raw.get("exec_timeout", 60),
+            exec_deny_patterns=agent_raw.get("exec_deny_patterns", []),
+            memory_enabled=agent_raw.get("memory_enabled", True),
+            memory_consolidate_every=agent_raw.get("memory_consolidate_every", 10),
+            brave_api_key=agent_raw.get("brave_api_key", None),
+            web_fetch_max_chars=agent_raw.get("web_fetch_max_chars", 50000),
+        )
+
+        return ForgeShellConfig(
+            nl_mode=nl_mode, redaction=redaction, llm=llm,
+            relay=relay, collab=collab, agent=agent,
+        )

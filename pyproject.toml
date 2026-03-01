@@ -13,6 +13,8 @@ dependencies = [
     "websockets>=14.0",
     "forge-llm>=0.7.4",
     "pyte>=0.8",
+    "httpx>=0.27",
+    "readability-lxml>=0.8",
 ]
 
 [project.scripts]

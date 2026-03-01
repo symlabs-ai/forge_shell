@@ -36,6 +36,7 @@ from src.application.usecases.nl_mode_engine import NLModeEngine
 from src.infrastructure.config.loader import ConfigLoader
 from src.infrastructure.collab.session_manager import SessionManager
 from src.infrastructure.collab.viewer_client import ViewerClient
+from src.infrastructure.agent.agent_service import AgentService
 from src.infrastructure.intelligence.forge_llm_adapter import ForgeLLMAdapter
 from src.infrastructure.intelligence.risk_engine import RiskEngine
 from src.infrastructure.audit.audit_logger import AuditLogger
@@ -216,7 +217,19 @@ def _build_session(
             timeout_seconds=config.llm.timeout_seconds,
             max_retries=config.llm.max_retries,
         )
-        engine = NLModeEngine(llm_adapter=adapter, risk_engine=RiskEngine())
+        agent_service = None
+        if config.agent.enabled:
+            agent_service = AgentService(
+                provider=config.llm.provider,
+                model=config.llm.model,
+                api_key=config.llm.api_key,
+                agent_config=config.agent,
+            )
+        engine = NLModeEngine(
+            llm_adapter=adapter,
+            risk_engine=RiskEngine(),
+            agent_service=agent_service,
+        )
         interceptor = NLInterceptor(nl_engine=engine)
         auditor = AuditLogger()
         redactor = Redactor.from_profile_name(config.redaction.default_profile)

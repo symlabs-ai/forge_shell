@@ -16,6 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
+from src.application.ports.agent_port import AgentPort
 from src.infrastructure.intelligence.forge_llm_adapter import ForgeLLMAdapter
 from src.infrastructure.intelligence.nl_response import NLResponse, RiskLevel
 from src.infrastructure.intelligence.risk_engine import RiskEngine
@@ -48,9 +49,15 @@ class NLModeEngine:
         risk_engine: engine de classificação de risco
     """
 
-    def __init__(self, llm_adapter: ForgeLLMAdapter, risk_engine: RiskEngine) -> None:
+    def __init__(
+        self,
+        llm_adapter: ForgeLLMAdapter,
+        risk_engine: RiskEngine,
+        agent_service: AgentPort | None = None,
+    ) -> None:
         self._adapter = llm_adapter
         self._risk = risk_engine
+        self._agent = agent_service
         self._state = NLModeState.NL_ACTIVE
 
     @property
@@ -116,8 +123,11 @@ class NLModeEngine:
         if stripped in {"exit", "logout"}:
             return NLResult(bash_command=stripped)
 
-        # --- NL Mode: envia ao ForgeLLM ---
-        response = self._adapter.request(text=text, context=context, on_chunk=on_chunk)
+        # --- NL Mode: envia ao Agent (se habilitado) ou ForgeLLM ---
+        if self._agent is not None:
+            response = self._agent.process(text=text, context=context, on_chunk=on_chunk)
+        else:
+            response = self._adapter.request(text=text, context=context, on_chunk=on_chunk)
 
         if response is None:
             return NLResult()
