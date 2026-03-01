@@ -57,17 +57,19 @@ class TestSession:
 
 
 class TestSessionPermissions:
-    def test_view_only_cannot_inject_input(self) -> None:
+    def test_view_only_can_inject_input(self) -> None:
+        """Co-control enabled: authenticated participants can inject input."""
         mgr = SessionManager()
         session = mgr.create_session(host_id="host-1", machine_code="497-051-961", password="123456", expire_minutes=60)
         mgr.add_participant(session.session_id, participant_id="peer-1", mode=SessionMode.VIEW_ONLY)
-        assert mgr.can_inject_input(session.session_id, "peer-1") is False
+        assert mgr.can_inject_input(session.session_id, "peer-1") is True
 
-    def test_suggest_only_cannot_inject_input(self) -> None:
+    def test_suggest_only_can_inject_input(self) -> None:
+        """Co-control enabled: authenticated participants can inject input."""
         mgr = SessionManager()
         session = mgr.create_session(host_id="host-1", machine_code="497-051-961", password="123456", expire_minutes=60)
         mgr.add_participant(session.session_id, participant_id="peer-2", mode=SessionMode.SUGGEST_ONLY)
-        assert mgr.can_inject_input(session.session_id, "peer-2") is False
+        assert mgr.can_inject_input(session.session_id, "peer-2") is True
 
     def test_suggest_only_can_send_cards(self) -> None:
         mgr = SessionManager()

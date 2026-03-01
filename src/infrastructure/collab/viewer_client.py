@@ -66,6 +66,17 @@ class ViewerClient:
         # iniciar loop de recepção em background
         self._task = asyncio.create_task(self._receive_loop(on_output, on_chat))
 
+    async def send_input(self, data: bytes) -> None:
+        """Send terminal input (keystrokes) to the host via relay."""
+        if self._ws is None:
+            raise RuntimeError("ViewerClient: não conectado")
+        msg = json.dumps({
+            "type": "terminal_input",
+            "session_id": self._session_id,
+            "payload": {"data": base64.b64encode(data).decode()},
+        })
+        await self._ws.send(msg.encode())
+
     async def send_chat(self, text: str, sender: str = "viewer") -> None:
         """Send a chat message to the relay for broadcast."""
         if self._ws is None:

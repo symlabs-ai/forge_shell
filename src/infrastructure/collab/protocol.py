@@ -19,6 +19,7 @@ class ClientRole(str, Enum):
 
 class MessageType(str, Enum):
     TERMINAL_OUTPUT = "terminal_output"
+    TERMINAL_INPUT = "terminal_input"
     CHAT = "chat"
     SUGGEST = "suggest"
     PING = "ping"

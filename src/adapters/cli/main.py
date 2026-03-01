@@ -364,10 +364,13 @@ def main(argv: list[str] | None = None) -> int:
         return rc
 
     if args.command == "attach":
+        import termios
+        import tty
+
         config = ConfigLoader().load()
         relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
         print(f"[forge_shell] Conectando à máquina: {args.machine_code}")
-        print(f"[forge_shell] Use Ctrl+C para encerrar a visualização")
+        print(f"[forge_shell] Use Ctrl+] para desconectar")
         ssl_ctx = _build_ssl_client_context(config.relay.tls)
         viewer = ViewerClient(
             relay_url=relay_url,
@@ -380,20 +383,42 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.buffer.write(data)
             sys.stdout.buffer.flush()
 
+        is_tty = sys.stdin.isatty()
+
         async def _viewer_loop() -> None:
             await viewer.connect(on_output=_on_viewer_output)
-            try:
-                # aguarda até relay fechar a conexão
-                await viewer.wait()
-            except (KeyboardInterrupt, asyncio.CancelledError):
-                pass
-            finally:
-                await viewer.close()
+            if is_tty:
+                loop = asyncio.get_event_loop()
+                try:
+                    while True:
+                        data = await loop.run_in_executor(None, lambda: os.read(sys.stdin.fileno(), 1024))
+                        if not data:
+                            break
+                        # Ctrl+] (0x1d) — escape to disconnect (telnet convention)
+                        if b"\x1d" in data:
+                            break
+                        await viewer.send_input(data)
+                except (KeyboardInterrupt, asyncio.CancelledError, OSError):
+                    pass
+            else:
+                # non-TTY (tests, piped stdin): fallback to wait-only mode
+                try:
+                    await viewer.wait()
+                except (KeyboardInterrupt, asyncio.CancelledError):
+                    pass
+            await viewer.close()
 
+        old_settings = None
         try:
+            if is_tty:
+                old_settings = termios.tcgetattr(sys.stdin)
+                tty.setraw(sys.stdin)
             asyncio.run(_viewer_loop())
         except KeyboardInterrupt:
             pass
+        finally:
+            if old_settings is not None:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
         return 0
 
     if args.command == "agent":

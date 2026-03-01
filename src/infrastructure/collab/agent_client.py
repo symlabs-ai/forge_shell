@@ -67,6 +67,17 @@ class AgentClient:
         # iniciar loop de recepção em background
         self._task = asyncio.create_task(self._receive_loop(on_output, on_suggest_ack, on_chat))
 
+    async def send_input(self, data: bytes) -> None:
+        """Send terminal input (keystrokes) to the host via relay."""
+        if self._ws is None:
+            raise RuntimeError("AgentClient: não conectado")
+        msg = json.dumps({
+            "type": "terminal_input",
+            "session_id": self._session_id,
+            "payload": {"data": base64.b64encode(data).decode()},
+        })
+        await self._ws.send(msg.encode())
+
     async def send_suggest(
         self,
         commands: list[str],

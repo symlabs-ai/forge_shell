@@ -122,12 +122,11 @@ class SessionManager:
         return list(session.participants.values())
 
     def can_inject_input(self, session_id: str, participant_id: str) -> bool:
-        """Verifica se o participante pode injetar input no terminal (nunca, por ora)."""
-        # view-only e suggest-only nunca injetam input diretamente
+        """Verifica se o participante pode injetar input no terminal."""
         session = self._sessions.get(session_id)
-        if not session:
+        if not session or not session.is_valid:
             return False
-        return False  # co-control é pós-MVP
+        return participant_id in session.participants
 
     def can_send_suggestions(self, session_id: str, participant_id: str) -> bool:
         """Verifica se o participante pode enviar cards de sugestão."""

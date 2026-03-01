@@ -136,6 +136,19 @@ class RelayHandler:
                         for pws in dead:
                             peers.remove(pws)
 
+                elif msg_type == "terminal_input" and role in ("viewer", "agent"):
+                    # forward input para todos os hosts da sessão
+                    session = _sessions.get(session_id, {})
+                    hosts = session.get("host", [])
+                    dead = []
+                    for hws in list(hosts):
+                        try:
+                            await hws.send(raw)
+                        except Exception:
+                            dead.append(hws)
+                    for hws in dead:
+                        hosts.remove(hws)
+
                 elif msg_type == "suggest" and role == "agent":
                     # forward suggest apenas para hosts da sessão
                     hosts = _sessions.get(session_id, {}).get("host", [])

@@ -49,6 +49,7 @@ class HostRelayClient:
         self,
         on_suggest: Callable[[dict], None] | None = None,
         on_chat: Callable[[dict], None] | None = None,
+        on_input: Callable[[bytes], None] | None = None,
     ) -> None:
         if websockets is None:
             raise RuntimeError("websockets não instalado")
@@ -64,8 +65,8 @@ class HostRelayClient:
         }).encode())
         self._on_chat = on_chat
         # iniciar loop de recepção em background
-        if on_suggest is not None or on_chat is not None:
-            self._task = asyncio.create_task(self._receive_loop(on_suggest, on_chat))
+        if on_suggest is not None or on_chat is not None or on_input is not None:
+            self._task = asyncio.create_task(self._receive_loop(on_suggest, on_chat, on_input))
 
     async def send_output(self, data: bytes) -> None:
         """Enviar chunk de PTY output para o relay (codificado em base64)."""
@@ -93,6 +94,7 @@ class HostRelayClient:
         self,
         on_suggest: Callable[[dict], None] | None,
         on_chat: Callable[[dict], None] | None,
+        on_input: Callable[[bytes], None] | None = None,
     ) -> None:
         if self._ws is None:
             return
@@ -103,7 +105,11 @@ class HostRelayClient:
                 except (json.JSONDecodeError, ValueError):
                     continue
                 msg_type = msg.get("type", "")
-                if msg_type == "suggest" and on_suggest:
+                if msg_type == "terminal_input" and on_input:
+                    data = base64.b64decode(msg.get("payload", {}).get("data", ""))
+                    if data:
+                        on_input(data)
+                elif msg_type == "suggest" and on_suggest:
                     on_suggest(msg.get("payload", {}))
                 elif msg_type == "chat" and on_chat:
                     on_chat(msg.get("payload", {}))

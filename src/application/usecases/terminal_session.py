@@ -573,6 +573,12 @@ class TerminalSession:
                     if chat is not None:
                         self._handle_chat_message(chat)
 
+                # Drena input remoto de viewer/agent via relay
+                if self._relay_bridge is not None:
+                    remote_input = self._relay_bridge.get_input()
+                    if remote_input:
+                        self._engine.write(remote_input)
+
                 # Auto-ativar chat quando primeiro participante conecta
                 # (detectado pelo recebimento de chat ou suggest)
                 # NÃO ativar imediatamente — preserva session info na tela

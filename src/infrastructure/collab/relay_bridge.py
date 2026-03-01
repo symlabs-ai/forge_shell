@@ -43,6 +43,7 @@ class RelayBridge:
         self._token = token
         self._ssl = ssl
         self._queue: queue.Queue[bytes | None] = queue.Queue()
+        self._input_queue: queue.Queue[bytes] = queue.Queue()     # incoming remote input
         self._suggest_queue: queue.Queue[dict] = queue.Queue()
         self._chat_queue: queue.Queue[dict] = queue.Queue()       # incoming chat
         self._chat_out_queue: queue.Queue[dict] = queue.Queue()   # outgoing chat
@@ -71,6 +72,13 @@ class RelayBridge:
     def send(self, data: bytes) -> None:
         """Enfileira dados para envio ao relay (thread-safe, síncrono)."""
         self._queue.put(data)
+
+    def get_input(self) -> bytes | None:
+        """Poll non-blocking para input remoto recebido de viewer/agent (thread-safe)."""
+        try:
+            return self._input_queue.get_nowait()
+        except queue.Empty:
+            return None
 
     def get_suggest(self) -> dict | None:
         """Poll non-blocking para sugestões recebidas do agent (thread-safe)."""
@@ -102,6 +110,9 @@ class RelayBridge:
             ssl=self._ssl,
         )
 
+        def _on_input(data: bytes) -> None:
+            self._input_queue.put_nowait(data)
+
         def _on_suggest(payload: dict) -> None:
             self._suggest_queue.put_nowait(payload)
 
@@ -109,7 +120,7 @@ class RelayBridge:
             self._chat_queue.put_nowait(payload)
 
         try:
-            await client.connect(on_suggest=_on_suggest, on_chat=_on_chat)
+            await client.connect(on_suggest=_on_suggest, on_chat=_on_chat, on_input=_on_input)
         except Exception as exc:
             log.debug("RelayBridge: falha ao conectar: %s", exc)
             return
