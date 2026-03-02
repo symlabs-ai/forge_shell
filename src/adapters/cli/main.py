@@ -474,6 +474,7 @@ def main(argv: list[str] | None = None) -> int:
         return rc
 
     if args.command == "attach":
+        import select as _select
         import signal
         import termios
         import tty
@@ -493,6 +494,13 @@ def main(argv: list[str] | None = None) -> int:
         is_tty = sys.stdin.isatty()
         session = _ViewerSession(viewer, sys.stdout.buffer)
 
+        def _read_stdin_with_timeout(fd: int, timeout: float = 0.05):
+            """Read stdin using select+read. Returns bytes or None on timeout."""
+            ready, _, _ = _select.select([fd], [], [], timeout)
+            if ready:
+                return os.read(fd, 1024)
+            return None
+
         async def _viewer_loop() -> None:
             await viewer.connect(
                 on_output=session.on_output,
@@ -506,15 +514,14 @@ def main(argv: list[str] | None = None) -> int:
 
             if is_tty:
                 loop = asyncio.get_event_loop()
+                fd = sys.stdin.fileno()
                 try:
                     while True:
-                        try:
-                            data = await asyncio.wait_for(
-                                loop.run_in_executor(None, lambda: os.read(sys.stdin.fileno(), 1024)),
-                                timeout=0.05,
-                            )
-                        except asyncio.TimeoutError:
-                            # Flush escape buffer on timeout (lone ESC)
+                        data = await loop.run_in_executor(
+                            None, lambda: _read_stdin_with_timeout(fd),
+                        )
+                        if data is None:
+                            # Timeout — flush escape buffer (lone ESC)
                             for target, chunk in session.flush_esc_buffer():
                                 if target == "terminal":
                                     await viewer.send_input(chunk)
