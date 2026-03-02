@@ -17,6 +17,15 @@ import sys
 from src.infrastructure.config.loader import ConfigLoader
 from src.application.usecases.terminal_session import TerminalSession
 
+# ANSI colors (mesma convenção de main.py)
+_BOLD = "\033[1m"
+_DIM = "\033[2m"
+_RED = "\033[31m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+_CYAN = "\033[36m"
+_RESET = "\033[0m"
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -55,7 +64,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    config = ConfigLoader().load()
+    loader = ConfigLoader()
+    config = loader.load()
 
     if args.command == "share":
         from src.infrastructure.collab import machine_id as _machine_id
@@ -65,7 +75,9 @@ def main(argv: list[str] | None = None) -> int:
 
         if getattr(args, "regen", False):
             machine_code = _machine_id.regenerate()
-            print("[forge_host] Código da máquina regenerado.")
+            sys.stderr.write(
+                f"{_YELLOW}[forge_host]{_RESET} Código da máquina regenerado.\r\n"
+            )
         else:
             machine_code = _machine_id.load_or_create()
 
@@ -76,11 +88,6 @@ def main(argv: list[str] | None = None) -> int:
 
         relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
 
-        print(f"[forge_host] Sessão compartilhada iniciada")
-        print(f"  Código da máquina : {result['machine_code']}")
-        print(f"  Senha de sessão   : {result['password']}")
-        print(f"  Relay URL         : {relay_url}")
-
         ssl_client_ctx = _build_ssl_client_context(config.relay.tls)
         bridge = RelayBridge(
             relay_url=relay_url,
@@ -89,6 +96,37 @@ def main(argv: list[str] | None = None) -> int:
             ssl=ssl_client_ctx,
         )
         bridge.start()
+
+        if not bridge.wait_connected(timeout=5.0):
+            err = bridge.connect_error or "timeout"
+            sys.stderr.write(
+                f"\r\n{_RED}[forge_host] Falha ao conectar ao relay: {err}{_RESET}\r\n"
+                f"  Verifique se o relay está acessível: {_BOLD}{relay_url}{_RESET}\r\n"
+            )
+            bridge.stop()
+            return 1
+
+        # --- first-run hint ---
+        if loader.first_run:
+            cfg_dir = loader._path.parent
+            sys.stderr.write(f"\r\n  {_CYAN}Primeira execução detectada{_RESET}\r\n")
+            sys.stderr.write(f"  Config: {_DIM}{cfg_dir / 'config.yaml.example'}{_RESET}\r\n")
+            sys.stderr.write(f"  Copie para {_DIM}{cfg_dir / 'config.yaml'}{_RESET} para personalizar\r\n")
+
+        # --- session info ---
+        is_ephemeral = config.collab.permanent_password is None
+        sys.stderr.write(f"\r\n  {_GREEN}Sessão compartilhada iniciada{_RESET}\r\n\r\n")
+        sys.stderr.write(f"  Código da máquina : {_BOLD}{result['machine_code']}{_RESET}\r\n")
+        sys.stderr.write(f"  Senha de sessão   : {_BOLD}{result['password']}{_RESET}\r\n")
+        if is_ephemeral:
+            sys.stderr.write(f"  {_DIM}(senha efêmera — muda a cada execução){_RESET}\r\n")
+        sys.stderr.write(f"  Relay             : {_DIM}{relay_url}{_RESET}\r\n")
+
+        sys.stderr.write(
+            f"\r\n  Para conectar, o viewer deve executar:\r\n"
+            f"  {_BOLD}forge_shell attach {result['machine_code']} {result['password']}{_RESET}\r\n"
+        )
+        sys.stderr.write(f"\r\n  {_DIM}Ctrl+X para encerrar a sessão compartilhada{_RESET}\r\n\r\n")
 
         session = TerminalSession(config=config, passthrough=True, relay_bridge=bridge)
         rc = session.run()

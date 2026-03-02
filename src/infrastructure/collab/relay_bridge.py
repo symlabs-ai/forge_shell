@@ -50,6 +50,8 @@ class RelayBridge:
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._started = False
+        self._connected = threading.Event()
+        self._connect_error: str | None = None
 
     def start(self) -> None:
         """Inicia thread asyncio background."""
@@ -98,6 +100,15 @@ class RelayBridge:
         """Enfileira mensagem de chat para envio ao relay (thread-safe, síncrono)."""
         self._chat_out_queue.put({"text": text, "sender": sender})
 
+    def wait_connected(self, timeout: float = 5.0) -> bool:
+        """Bloqueia até a conexão ser estabelecida ou falhar. Retorna True se conectado."""
+        self._connected.wait(timeout=timeout)
+        return self._connected.is_set() and self._connect_error is None
+
+    @property
+    def connect_error(self) -> str | None:
+        return self._connect_error
+
     def _run_loop(self) -> None:
         """Loop asyncio que corre na thread background."""
         asyncio.run(self._async_loop())
@@ -121,7 +132,9 @@ class RelayBridge:
 
         try:
             await client.connect(on_suggest=_on_suggest, on_chat=_on_chat, on_input=_on_input)
+            self._connected.set()
         except Exception as exc:
+            self._connect_error = str(exc)
             log.debug("RelayBridge: falha ao conectar: %s", exc)
             return
 

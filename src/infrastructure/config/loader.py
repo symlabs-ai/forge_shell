@@ -6,6 +6,7 @@ Valores ausentes no arquivo são preenchidos pelos defaults definidos aqui.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -178,7 +179,9 @@ class ConfigLoader:
     """
 
     def __init__(self, config_path: Path | None = None) -> None:
-        self._path = config_path or Path.home() / ".forge_shell" / "config.yaml"
+        env_path = os.environ.get("FORGE_SHELL_CONFIG")
+        self._path = config_path or (Path(env_path) if env_path else Path.home() / ".forge_shell" / "config.yaml")
+        self._created_example = False
 
     def ensure_config_dir(self) -> None:
         """Cria ~/.forge_shell/ e config.yaml.example se não existirem (best-effort)."""
@@ -188,8 +191,14 @@ class ConfigLoader:
             example = cfg_dir / "config.yaml.example"
             if not example.exists():
                 example.write_text(_CONFIG_EXAMPLE, encoding="utf-8")
+                self._created_example = True
         except (OSError, PermissionError):
             pass
+
+    @property
+    def first_run(self) -> bool:
+        """True se o config.yaml.example foi criado nesta execução (primeiro uso)."""
+        return self._created_example
 
     def load(self) -> ForgeShellConfig:
         self.ensure_config_dir()
