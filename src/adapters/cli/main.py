@@ -208,6 +208,7 @@ def _build_session(
     config,
     passthrough: bool = False,
     relay_bridge=None,
+    chat_agent=None,
 ) -> TerminalSession:
     """Constrói TerminalSession com todas as dependências injetadas."""
     interceptor = None
@@ -245,6 +246,7 @@ def _build_session(
         auditor=auditor,
         redactor=redactor,
         relay_bridge=relay_bridge,
+        chat_agent=chat_agent,
     )
 
 
@@ -492,8 +494,28 @@ def main(argv: list[str] | None = None) -> int:
         )
         bridge.start()
 
+        # Iniciar chat agent worker se agent está habilitado
+        chat_agent = None
+        if config.agent.enabled:
+            from src.application.usecases.chat_agent_worker import ChatAgentWorker
+            agent_svc = AgentService(
+                provider=config.llm.provider,
+                model=config.llm.model,
+                api_key=config.llm.api_key,
+                agent_config=config.agent,
+            )
+            chat_agent = ChatAgentWorker(
+                agent=agent_svc, build_context=lambda: {},
+            )
+
         # Iniciar sessão normal com relay_bridge injetado
-        session = _build_session(config, relay_bridge=bridge)
+        session = _build_session(
+            config, relay_bridge=bridge, chat_agent=chat_agent,
+        )
+
+        # Lazy binding: conectar build_context ao TerminalSession
+        if chat_agent is not None:
+            chat_agent._build_context = session._build_context
 
         session._write_startup_hint()
         rc = session.run()
