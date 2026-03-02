@@ -66,7 +66,7 @@ class ChatManager:
         if out is None:
             return
 
-        left_cols = cols - _CHAT_WIDTH - 1
+        left_cols = cols - _CHAT_WIDTH - 2  # match SplitRenderer's " │" (space + separator)
 
         self.vt_screen = VTScreen(rows, left_cols)
         self.chat_panel = ChatPanel(rows, _CHAT_WIDTH)
@@ -100,7 +100,7 @@ class ChatManager:
     def handle_message(self, payload: dict) -> None:
         """Handle incoming chat message from relay."""
         if not self.active:
-            self.activate()
+            return  # Don't auto-activate; host activates chat with F4
         if self.chat_panel is None:
             return
         sender = payload.get("sender", "?")
@@ -125,7 +125,7 @@ class ChatManager:
     def handle_resize(self, rows: int, cols: int) -> None:
         """Handle terminal resize for chat panel."""
         if cols >= _MIN_SPLIT_COLS:
-            left_cols = cols - _CHAT_WIDTH - 1
+            left_cols = cols - _CHAT_WIDTH - 2
             if self.vt_screen:
                 self.vt_screen.resize(rows, left_cols)
             if self.chat_panel:
@@ -151,7 +151,7 @@ class ChatManager:
         if self.vt_screen and self.chat_panel and self.split_renderer:
             from src.infrastructure.terminal_engine.split_renderer import SplitRenderer
             out = self._out
-            left_cols = cols - _CHAT_WIDTH - 1
+            left_cols = cols - _CHAT_WIDTH - 2
             self.vt_screen.resize(rows, left_cols)
             self.chat_panel.resize(rows, _CHAT_WIDTH)
             self.split_renderer = SplitRenderer(out, rows, cols, chat_width=_CHAT_WIDTH)

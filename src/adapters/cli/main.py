@@ -306,6 +306,8 @@ class _ViewerSession:
         self._chat: ChatPanel | None = None
         self._renderer: SplitRenderer | None = None
         self._router: InputRouter = InputRouter()
+        self._buffering = False
+        self._buffer: list[bytes] = []
 
     def _ensure_vt(self) -> None:
         """Lazily create VTScreen at full terminal width to capture output."""
@@ -319,11 +321,24 @@ class _ViewerSession:
         # Always feed VTScreen to keep it in sync with host PTY
         self._ensure_vt()
         self._vt.feed(data)
+        if self._buffering:
+            self._buffer.append(data)
+            return
         if not self._chat_active:
             self._stdout.write(data)
             self._stdout.flush()
         # Don't render here — let the stdin loop batch renders to avoid
         # cursor flicker from readline's CR+redraw sequences.
+
+    def flush_buffer(self) -> None:
+        """Flush buffered output to stdout."""
+        self._buffering = False
+        for chunk in self._buffer:
+            if not self._chat_active:
+                self._stdout.write(chunk)
+        if self._buffer:
+            self._stdout.flush()
+        self._buffer.clear()
 
     def on_chat(self, payload: dict) -> None:
         if not self._chat_active:
@@ -493,8 +508,6 @@ def main(argv: list[str] | None = None) -> int:
 
         config = ConfigLoader().load()
         relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
-        print(f"[forge_shell] Conectando à máquina: {args.machine_code}")
-        print(f"[forge_shell] Use Ctrl+] para desconectar | F4 para chat")
         ssl_ctx = _build_ssl_client_context(config.relay.tls)
         viewer = ViewerClient(
             relay_url=relay_url,
@@ -506,6 +519,17 @@ def main(argv: list[str] | None = None) -> int:
         is_tty = sys.stdin.isatty()
         session = _ViewerSession(viewer, sys.stdout.buffer)
 
+        _YELLOW = "\033[33m"
+        _GREEN = "\033[32m"
+        _RED = "\033[31m"
+        _RESET = "\033[0m"
+        _BOLD = "\033[1m"
+
+        def _status(msg: str, color: str = _YELLOW) -> None:
+            """Print status message to stderr (avoids raw mode issues)."""
+            sys.stderr.write(f"{color}[forge_shell]{_RESET} {msg}\r\n")
+            sys.stderr.flush()
+
         def _read_stdin_with_timeout(fd: int, timeout: float = 0.05):
             """Read stdin using select+read. Returns bytes or None on timeout."""
             ready, _, _ = _select.select([fd], [], [], timeout)
@@ -514,10 +538,42 @@ def main(argv: list[str] | None = None) -> int:
             return None
 
         async def _viewer_loop() -> None:
-            await viewer.connect(
-                on_output=session.on_output,
-                on_chat=session.on_chat,
-            )
+            _status(f"Conectando à máquina {_BOLD}{args.machine_code}{_RESET}...")
+
+            # Buffer output during handshake so status messages aren't interleaved
+            session._buffering = True
+
+            try:
+                await viewer.connect(
+                    on_output=session.on_output,
+                    on_chat=session.on_chat,
+                )
+            except Exception as exc:
+                session._buffering = False
+                _status(f"Falha ao conectar ao relay: {exc}", _RED)
+                return
+
+            _status("Conectado ao relay. Aguardando resposta do host...")
+
+            # Send Enter to trigger host prompt (host only sends output on PTY activity)
+            await viewer.send_input(b"\r")
+
+            # Wait for host to respond (first terminal_output)
+            host_alive = await viewer.wait_for_host(timeout=10.0)
+            if not host_alive:
+                session._buffering = False
+                _status(
+                    "Host não respondeu em 10s. Verifique se a máquina está "
+                    "online e o código/senha estão corretos.",
+                    _RED,
+                )
+                await viewer.close()
+                return
+
+            _status(f"Conectado! Use {_BOLD}Ctrl+]{_RESET} para sair | {_BOLD}F4{_RESET} para chat", _GREEN)
+
+            # Flush buffered output and show host terminal
+            session.flush_buffer()
 
             # SIGWINCH handler for terminal resize
             if is_tty:
@@ -541,6 +597,9 @@ def main(argv: list[str] | None = None) -> int:
                                     session._chat.handle_key(chunk)
                             # Batch render: all output since last cycle
                             session.render_if_dirty()
+                            # Detect host disconnect (receive task exited)
+                            if viewer._task and viewer._task.done():
+                                break
                             continue
                         if not data:
                             break
@@ -560,16 +619,21 @@ def main(argv: list[str] | None = None) -> int:
             await viewer.close()
 
         old_settings = None
+        exit_reason = "disconnect"
         try:
             if is_tty:
                 old_settings = termios.tcgetattr(sys.stdin)
                 tty.setraw(sys.stdin)
             asyncio.run(_viewer_loop())
         except KeyboardInterrupt:
-            pass
+            exit_reason = "interrupt"
         finally:
             if old_settings is not None:
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+            if viewer._task and viewer._task.done():
+                _status("Host desconectou.", _YELLOW)
+            else:
+                _status("Desconectado.", _YELLOW)
         return 0
 
     if args.command == "agent":

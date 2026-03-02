@@ -44,6 +44,12 @@ class ViewerClient:
         self._ssl = ssl
         self._ws = None
         self._task: asyncio.Task | None = None
+        self._got_output = False  # True after first terminal_output received
+
+    @property
+    def connected(self) -> bool:
+        """True if WebSocket is open and receive loop is running."""
+        return self._ws is not None and self._task is not None and not self._task.done()
 
     async def connect(
         self,
@@ -63,8 +69,24 @@ class ViewerClient:
             "payload": {"role": "viewer", "token": self._token},
         }).encode())
         self._on_chat = on_chat
+        self._got_output = False
         # iniciar loop de recepção em background
         self._task = asyncio.create_task(self._receive_loop(on_output, on_chat))
+
+    async def wait_for_host(self, timeout: float = 10.0) -> bool:
+        """Wait until first terminal_output arrives (host is alive).
+
+        Returns True if host responded, False on timeout.
+        """
+        deadline = asyncio.get_event_loop().time() + timeout
+        while not self._got_output:
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                return False
+            await asyncio.sleep(min(0.1, remaining))
+            if self._task and self._task.done():
+                return False
+        return True
 
     async def send_input(self, data: bytes) -> None:
         """Send terminal input (keystrokes) to the host via relay."""
@@ -103,6 +125,7 @@ class ViewerClient:
                     continue
                 msg_type = msg.get("type", "")
                 if msg_type == "terminal_output":
+                    self._got_output = True
                     encoded = msg.get("payload", {}).get("data", "")
                     try:
                         data = base64.b64decode(encoded)
@@ -110,6 +133,10 @@ class ViewerClient:
                         data = encoded.encode()
                     if on_output:
                         on_output(data)
+                elif msg_type == "error":
+                    err_msg = msg.get("payload", {}).get("message", "")
+                    log.debug("ViewerClient: error from relay: %s", err_msg)
+                    raise ConnectionError(err_msg)
                 elif msg_type == "chat" and on_chat:
                     on_chat(msg.get("payload", {}))
         except Exception as exc:

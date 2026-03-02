@@ -60,6 +60,8 @@ class RelayHandler:
             self._host,
             self._port,
             process_request=self._process_request,
+            ping_interval=20,
+            ping_timeout=10,
             **kwargs,
         ) as server:
             self._server = server
@@ -100,6 +102,19 @@ class RelayHandler:
                             _sessions[session_id] = {"host": [], "viewer": [], "agent": []}
                         elif "agent" not in _sessions[session_id]:
                             _sessions[session_id]["agent"] = []
+                        # Evictar hosts anteriores (só 1 host ativo por sessão)
+                        old_hosts = _sessions[session_id]["host"]
+                        if old_hosts:
+                            log.debug(
+                                "RelayHandler: evicting %d stale host(s) from %s",
+                                len(old_hosts), session_id,
+                            )
+                            for old_ws in old_hosts:
+                                try:
+                                    await old_ws.close()
+                                except Exception:
+                                    pass
+                            _sessions[session_id]["host"] = []
                         _sessions[session_id][role].append(ws)
                         if token:
                             _session_tokens[session_id] = token
