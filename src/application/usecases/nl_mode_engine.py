@@ -97,7 +97,7 @@ class NLModeEngine:
         # --- escape ``!<cmd>`` → bash direto, volta ao NL Mode ---
         if stripped.startswith("!") and len(stripped) > 1:
             bash_cmd = stripped[1:].lstrip()
-            self._state = NLModeState.NL_ACTIVE  # garante retorno ao NL Mode
+            self._state = NLModeState.NL_ACTIVE
             return NLResult(bash_command=bash_cmd)
 
         # --- :help → exibir ajuda local (sem LLM, funciona em ambos os modos) ---

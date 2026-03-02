@@ -71,7 +71,6 @@ class TerminalSession:
         auditor=None,
         redactor=None,
         relay_bridge=None,
-        chat_agent=None,
     ) -> None:
         self.config = config
 
@@ -98,7 +97,6 @@ class TerminalSession:
         self._output_lines: deque = deque(maxlen=config.nl_mode.context_lines)
         self._output_partial: str = ""
         self._redactor = redactor
-        self._chat_agent = chat_agent  # ChatAgentWorker | None
         # Chat panel (Phase 3) — delegado ao ChatManager
         self._chat = ChatManager(self._engine, self._get_terminal_size)
         self._renderer = OutputRenderer(self._engine)
@@ -146,43 +144,10 @@ class TerminalSession:
     def _handle_chat_message(self, payload: dict) -> None:
         self._sync_chat()
         self._chat.handle_message(payload)
-        # Route to chat agent if available
-        if self._chat_agent is not None:
-            sender = payload.get("sender", "?")
-            text = payload.get("text", "")
-            if sender != "agent" and text.strip():
-                self._chat_agent.submit(sender, text)
 
     def _send_chat_message(self, text: str) -> None:
         self._sync_chat()
         self._chat.send_message(text, relay_bridge=self._relay_bridge)
-
-    def _handle_chat_agent_result(self, result) -> None:
-        """Process result from ChatAgentWorker and send as agent chat message."""
-        if result.response is None:
-            return
-        text = result.response.explanation
-        if result.response.commands:
-            cmds = "\n".join(f"$ {c}" for c in result.response.commands)
-            text = f"{text}\n\n{cmds}"
-        self._send_chat_agent_message(text)
-        # Optionally render as agent suggestion in terminal
-        if result.response.commands:
-            self._handle_agent_suggest({
-                "commands": result.response.commands,
-                "explanation": result.response.explanation,
-                "risk_level": result.response.risk_level.value,
-            })
-
-    def _send_chat_agent_message(self, text: str) -> None:
-        """Send a message as role 'agent' to chat panel and relay."""
-        self._sync_chat()
-        if self._chat.chat_panel is not None:
-            self._chat.chat_panel.add_message("agent", text, "agent")
-        if self._relay_bridge is not None:
-            self._relay_bridge.send_chat(text, sender="agent")
-        if self._chat.split_renderer:
-            self._chat.split_renderer.render()
 
     # Compatibility properties — delegate to ChatManager fields
     @property
@@ -607,12 +572,6 @@ class TerminalSession:
                     chat = self._relay_bridge.get_chat()
                     if chat is not None:
                         self._handle_chat_message(chat)
-
-                # Poll chat agent results
-                if self._chat_agent is not None:
-                    agent_result = self._chat_agent.poll()
-                    if agent_result is not None:
-                        self._handle_chat_agent_result(agent_result)
 
                 # Drena input remoto de viewer/agent via relay
                 if self._relay_bridge is not None:

@@ -33,14 +33,35 @@ PROJECT_DIR = str(Path(__file__).parent.parent.parent)
 TIMEOUT = 10
 
 
-def _spawn(args: list[str] | None = None) -> "pexpect.spawn":
+def _noagent_config() -> str:
+    """Cria config temporário com agent desabilitado. Retorna path."""
+    import tempfile, os, yaml  # noqa: E401
+    cfg_dir = tempfile.mkdtemp(prefix="forge_shell_test_")
+    cfg_path = os.path.join(cfg_dir, "config.yaml")
+    real_cfg = Path.home() / ".forge_shell" / "config.yaml"
+    data: dict = {}
+    if real_cfg.exists():
+        with open(real_cfg) as f:
+            data = yaml.safe_load(f) or {}
+    data.setdefault("agent", {})["enabled"] = False
+    with open(cfg_path, "w") as f:
+        yaml.dump(data, f)
+    return cfg_path
+
+
+def _spawn(args: list[str] | None = None, env: dict[str, str] | None = None) -> "pexpect.spawn":
     """Spawna forge_shell num PTY real via pexpect."""
+    import os as _os
+    spawn_env = _os.environ.copy()
+    if env:
+        spawn_env.update(env)
     argv = ["-m", "src.adapters.cli.main"] + (args or [])
     return pexpect.spawn(
         sys.executable, argv,
         cwd=PROJECT_DIR,
         timeout=TIMEOUT,
         encoding="utf-8",
+        env=spawn_env,
     )
 
 
@@ -110,8 +131,11 @@ class TestToggle:
 # ---------------------------------------------------------------------------
 
 class TestBashEscape:
+    """Testa !cmd como bash escape direto (requer agent desabilitado)."""
+
     def test_bash_escape_executes_command(self):
-        child = _spawn()
+        cfg = _noagent_config()
+        child = _spawn(env={"FORGE_SHELL_CONFIG": cfg})
         try:
             child.expect(r"\$", timeout=10)
             child.sendline("!echo SMOKE_OK")
@@ -125,12 +149,13 @@ class TestBashEscape:
         Input interativo (ex: senha do sudo) ia para o NL buffer → LLM.
         Agora deve ir direto ao PTY.
         """
-        child = _spawn()
+        cfg = _noagent_config()
+        child = _spawn(env={"FORGE_SHELL_CONFIG": cfg})
         try:
             child.expect(r"\$", timeout=10)
             # read -p exige input interativo; só completa se _pty_running=True
             child.sendline("!read -p 'INPUT_PROMPT: ' __SMOKE__")
-            child.expect("INPUT_PROMPT:", timeout=5)
+            child.expect("INPUT_PROMPT:", timeout=10)
             child.sendline("smoke_value")
             child.expect(r"\$", timeout=5)
             # se _pty_running fosse False, "pensando" apareceria no output

@@ -50,6 +50,24 @@ from src.infrastructure.terminal_engine.split_renderer import SplitRenderer
 from src.infrastructure.terminal_engine.input_router import InputRouter
 
 
+import re
+import time
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07|\x1b\[.*?[@-~]")
+
+def _strip_ansi(text: str) -> str:
+    """Remove escape sequences ANSI do texto."""
+    return _ANSI_RE.sub("", text)
+
+
+# ANSI colors for status messages
+_YELLOW = "\033[33m"
+_GREEN = "\033[32m"
+_RED = "\033[31m"
+_RESET = "\033[0m"
+_BOLD = "\033[1m"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="forge_shell",
@@ -139,6 +157,93 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="SENHA",
         help="Senha de sessão (6 dígitos, exibida pelo 'forge_shell share')",
     )
+    agent_parser.add_argument(
+        "--text",
+        action="store_true",
+        help="Modo texto simples: stdin = comandos, stdout = output sem ANSI",
+    )
+
+    # exec
+    exec_parser = subparsers.add_parser(
+        "exec",
+        help="Executar comando remoto one-shot e imprimir output",
+        description=(
+            "Conecta como viewer, envia o comando, captura output e desconecta. "
+            "Útil para automação e scripts."
+        ),
+    )
+    exec_parser.add_argument(
+        "machine_code",
+        metavar="MACHINE_CODE",
+        help="Código da máquina host (ex: 497-051-961)",
+    )
+    exec_parser.add_argument(
+        "password",
+        metavar="SENHA",
+        help="Senha de sessão (6 dígitos)",
+    )
+    exec_parser.add_argument(
+        "command_str",
+        metavar="COMMAND",
+        help="Comando a executar no host remoto",
+    )
+    exec_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=10,
+        help="Segundos para aguardar output completo (padrão: 10)",
+    )
+    exec_parser.add_argument(
+        "--strip-ansi",
+        action="store_true",
+        help="Remove escape sequences ANSI do output",
+    )
+
+    # message
+    message_parser = subparsers.add_parser(
+        "message",
+        help="Enviar chat message para sessão remota",
+        description=(
+            "Envia uma mensagem de chat para a sessão e opcionalmente "
+            "aguarda resposta do host."
+        ),
+    )
+    message_parser.add_argument(
+        "machine_code",
+        metavar="MACHINE_CODE",
+        help="Código da máquina host (ex: 497-051-961)",
+    )
+    message_parser.add_argument(
+        "password",
+        metavar="SENHA",
+        help="Senha de sessão (6 dígitos)",
+    )
+    message_parser.add_argument(
+        "text",
+        metavar="TEXT",
+        help="Texto da mensagem a enviar",
+    )
+    message_parser.add_argument(
+        "--wait",
+        type=int,
+        default=0,
+        help="Segundos para aguardar resposta (0 = fire-and-forget, padrão: 0)",
+    )
+
+    # ping
+    ping_parser = subparsers.add_parser(
+        "ping",
+        help="Verificar se o host está online no relay",
+        description=(
+            "Faz HTTP GET ao relay para checar se o host está online. "
+            "Não requer senha."
+        ),
+    )
+    ping_parser.add_argument(
+        "machine_code",
+        metavar="MACHINE_CODE",
+        help="Código da máquina host (ex: 497-051-961)",
+    )
 
     # relay
     relay_parser = subparsers.add_parser(
@@ -208,7 +313,6 @@ def _build_session(
     config,
     passthrough: bool = False,
     relay_bridge=None,
-    chat_agent=None,
 ) -> TerminalSession:
     """Constrói TerminalSession com todas as dependências injetadas."""
     interceptor = None
@@ -246,7 +350,6 @@ def _build_session(
         auditor=auditor,
         redactor=redactor,
         relay_bridge=relay_bridge,
-        chat_agent=chat_agent,
     )
 
 
@@ -494,28 +597,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         bridge.start()
 
-        # Iniciar chat agent worker se agent está habilitado
-        chat_agent = None
-        if config.agent.enabled:
-            from src.application.usecases.chat_agent_worker import ChatAgentWorker
-            agent_svc = AgentService(
-                provider=config.llm.provider,
-                model=config.llm.model,
-                api_key=config.llm.api_key,
-                agent_config=config.agent,
-            )
-            chat_agent = ChatAgentWorker(
-                agent=agent_svc, build_context=lambda: {},
-            )
-
         # Iniciar sessão normal com relay_bridge injetado
-        session = _build_session(
-            config, relay_bridge=bridge, chat_agent=chat_agent,
-        )
-
-        # Lazy binding: conectar build_context ao TerminalSession
-        if chat_agent is not None:
-            chat_agent._build_context = session._build_context
+        session = _build_session(config, relay_bridge=bridge)
 
         session._write_startup_hint()
         rc = session.run()
@@ -540,12 +623,6 @@ def main(argv: list[str] | None = None) -> int:
 
         is_tty = sys.stdin.isatty()
         session = _ViewerSession(viewer, sys.stdout.buffer)
-
-        _YELLOW = "\033[33m"
-        _GREEN = "\033[32m"
-        _RED = "\033[31m"
-        _RESET = "\033[0m"
-        _BOLD = "\033[1m"
 
         def _status(msg: str, color: str = _YELLOW) -> None:
             """Print status message to stderr (avoids raw mode issues)."""
@@ -663,19 +740,53 @@ def main(argv: list[str] | None = None) -> int:
         relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
         ssl_ctx = _build_ssl_client_context(config.relay.tls)
 
-        print(f"[forge_shell agent] Conectando à máquina: {args.machine_code}", file=sys.stderr)
-        print(f"[forge_shell agent] stdin: JSON (uma linha por comando)", file=sys.stderr)
-        print(f'[forge_shell agent]   input:   {{"type":"input","data":"base64..."}}', file=sys.stderr)
-        print(f'[forge_shell agent]   suggest: {{"commands":[...],"explanation":"...","risk_level":"LOW"}}', file=sys.stderr)
-        print(f"[forge_shell agent] stdout: PTY output (raw bytes)", file=sys.stderr)
-        print(f"[forge_shell agent] Ctrl+C para encerrar", file=sys.stderr)
-
         agent = AgentClient(
             relay_url=relay_url,
             session_id=args.machine_code,
             token=args.password,
             ssl=ssl_ctx,
         )
+
+        if getattr(args, "text", False):
+            # P4: Modo texto simplificado
+            print(f"[forge_shell agent] Modo texto — máquina: {args.machine_code}", file=sys.stderr)
+            print(f"[forge_shell agent] stdin: comandos texto (um por linha)", file=sys.stderr)
+            print(f"[forge_shell agent] stdout: output sem ANSI", file=sys.stderr)
+            print(f"[forge_shell agent] Ctrl+C para encerrar", file=sys.stderr)
+
+            def _on_text_output(data: bytes) -> None:
+                clean = _strip_ansi(data.decode(errors="replace"))
+                if clean:
+                    sys.stdout.write(clean)
+                    sys.stdout.flush()
+
+            async def _agent_text_loop() -> None:
+                await agent.connect(on_output=_on_text_output)
+                try:
+                    loop = asyncio.get_event_loop()
+                    while True:
+                        line = await loop.run_in_executor(None, sys.stdin.readline)
+                        if not line:
+                            break
+                        await agent.send_input(line.encode())
+                except (KeyboardInterrupt, asyncio.CancelledError):
+                    pass
+                finally:
+                    await agent.close()
+
+            try:
+                asyncio.run(_agent_text_loop())
+            except KeyboardInterrupt:
+                pass
+            return 0
+
+        # Modo JSON padrão
+        print(f"[forge_shell agent] Conectando à máquina: {args.machine_code}", file=sys.stderr)
+        print(f"[forge_shell agent] stdin: JSON (uma linha por comando)", file=sys.stderr)
+        print(f'[forge_shell agent]   input:   {{"type":"input","data":"base64..."}}', file=sys.stderr)
+        print(f'[forge_shell agent]   suggest: {{"commands":[...],"explanation":"...","risk_level":"LOW"}}', file=sys.stderr)
+        print(f"[forge_shell agent] stdout: PTY output (raw bytes)", file=sys.stderr)
+        print(f"[forge_shell agent] Ctrl+C para encerrar", file=sys.stderr)
 
         def _on_agent_output(data: bytes) -> None:
             sys.stdout.buffer.write(data)
@@ -719,6 +830,126 @@ def main(argv: list[str] | None = None) -> int:
         except KeyboardInterrupt:
             pass
         return 0
+
+    if args.command == "exec":
+        config = ConfigLoader().load()
+        relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
+        ssl_ctx = _build_ssl_client_context(config.relay.tls)
+        command = args.command_str  # usar field renomeado para evitar conflito
+        timeout = args.timeout
+        strip = getattr(args, "strip_ansi", False)
+
+        viewer = ViewerClient(
+            relay_url=relay_url,
+            session_id=args.machine_code,
+            token=args.password,
+            ssl=ssl_ctx,
+        )
+        output_buf = bytearray()
+
+        def _on_exec_output(data: bytes) -> None:
+            output_buf.extend(data)
+
+        async def _exec_loop() -> None:
+            await viewer.connect(on_output=_on_exec_output)
+            host_alive = await viewer.wait_for_host(timeout=5.0)
+            if not host_alive:
+                sys.stderr.write(f"{_RED}[forge_shell exec] Host não respondeu.{_RESET}\n")
+                await viewer.close()
+                return
+
+            # Enviar comando + Enter
+            await viewer.send_input(f"{command}\n".encode())
+
+            # Aguardar output estabilizar (sem novos dados por 1s)
+            last_len = 0
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                await asyncio.sleep(0.3)
+                if len(output_buf) > last_len:
+                    last_len = len(output_buf)
+                else:
+                    break
+
+            await viewer.close()
+
+            result = output_buf.decode(errors="replace")
+            if strip:
+                result = _strip_ansi(result)
+            sys.stdout.write(result)
+
+        try:
+            asyncio.run(_exec_loop())
+        except KeyboardInterrupt:
+            pass
+        return 0
+
+    if args.command == "message":
+        config = ConfigLoader().load()
+        relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
+        ssl_ctx = _build_ssl_client_context(config.relay.tls)
+        text = args.text
+        wait_seconds = args.wait
+
+        viewer = ViewerClient(
+            relay_url=relay_url,
+            session_id=args.machine_code,
+            token=args.password,
+            ssl=ssl_ctx,
+        )
+
+        async def _message_loop() -> None:
+            reply = None
+            reply_event = asyncio.Event()
+
+            def _on_msg_chat(payload: dict) -> None:
+                nonlocal reply
+                reply = payload
+                reply_event.set()
+
+            await viewer.connect(on_chat=_on_msg_chat)
+            await viewer.send_chat(text, sender="cli")
+
+            if wait_seconds > 0:
+                try:
+                    await asyncio.wait_for(reply_event.wait(), timeout=wait_seconds)
+                except asyncio.TimeoutError:
+                    pass
+
+            await viewer.close()
+
+            if reply:
+                sender = reply.get("sender", "?")
+                sys.stdout.write(f"[{sender}] {reply['text']}\n")
+
+        try:
+            asyncio.run(_message_loop())
+        except KeyboardInterrupt:
+            pass
+        return 0
+
+    if args.command == "ping":
+        import json as _json
+        import urllib.request
+
+        config = ConfigLoader().load()
+        relay_url = _relay_url_with_tls(config.relay.url, config.relay.tls)
+        # Converter WS URL para HTTP para o endpoint REST
+        http_url = relay_url.replace("wss://", "https://").replace("ws://", "http://")
+        http_url = f"{http_url}/session/{args.machine_code}"
+
+        try:
+            resp = urllib.request.urlopen(http_url, timeout=5)
+            data = _json.loads(resp.read())
+            if data.get("host_online"):
+                sys.stderr.write(f"{_GREEN}Host {args.machine_code} está online{_RESET}\n")
+                return 0
+            else:
+                sys.stderr.write(f"{_YELLOW}Host {args.machine_code} não encontrado no relay{_RESET}\n")
+                return 1
+        except Exception as exc:
+            sys.stderr.write(f"{_RED}Erro ao contactar relay: {exc}{_RESET}\n")
+            return 1
 
     # --passthrough ou modo padrão (NL Mode)
     config = ConfigLoader().load()

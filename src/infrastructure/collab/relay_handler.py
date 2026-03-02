@@ -75,6 +75,13 @@ class RelayHandler:
             body = json.dumps({"status": "ok", "active_sessions": active, "active_agents": agents})
             return connection.respond(HTTPStatus.OK, body + "\n")
 
+        if request.path.startswith("/session/"):
+            session_id = request.path.split("/session/", 1)[1]
+            hosts = _sessions.get(session_id, {}).get("host", [])
+            online = len(hosts) > 0
+            body = json.dumps({"session_id": session_id, "host_online": online})
+            return connection.respond(HTTPStatus.OK, body + "\n")
+
     def stop(self) -> None:
         self._stop_event.set()
 

@@ -26,6 +26,8 @@ class MessageType(str, Enum):
     PONG = "pong"
     SESSION_JOIN = "session_join"
     SESSION_LEAVE = "session_leave"
+    SESSION_QUERY = "session_query"
+    SESSION_STATUS = "session_status"
     ERROR = "error"
 
 
