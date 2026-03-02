@@ -319,11 +319,11 @@ class _ViewerSession:
         # Always feed VTScreen to keep it in sync with host PTY
         self._ensure_vt()
         self._vt.feed(data)
-        if self._chat_active and self._renderer:
-            self._renderer.render()
-        else:
+        if not self._chat_active:
             self._stdout.write(data)
             self._stdout.flush()
+        # Don't render here — let the stdin loop batch renders to avoid
+        # cursor flicker from readline's CR+redraw sequences.
 
     def on_chat(self, payload: dict) -> None:
         if not self._chat_active:
@@ -406,6 +406,11 @@ class _ViewerSession:
 
     def flush_esc_buffer(self) -> list[tuple[str, bytes]]:
         return self._router.flush_esc_buffer()
+
+    def render_if_dirty(self) -> None:
+        """Render if VTScreen or ChatPanel has pending changes. Called from stdin loop."""
+        if self._chat_active and self._renderer:
+            self._renderer.render()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -534,8 +539,8 @@ def main(argv: list[str] | None = None) -> int:
                                     await viewer.send_input(chunk)
                                 elif target == "chat" and session._chat:
                                     session._chat.handle_key(chunk)
-                                    if session._renderer:
-                                        session._renderer.render()
+                            # Batch render: all output since last cycle
+                            session.render_if_dirty()
                             continue
                         if not data:
                             break
@@ -543,6 +548,8 @@ def main(argv: list[str] | None = None) -> int:
                         if b"\x1d" in data:
                             break
                         await session.handle_input(data)
+                        # Batch render after processing input
+                        session.render_if_dirty()
                 except (KeyboardInterrupt, asyncio.CancelledError, OSError):
                     pass
             else:

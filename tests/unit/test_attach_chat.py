@@ -108,10 +108,11 @@ class TestViewerSessionOutput:
         stdout_buf.reset_mock()
 
         session.on_output(b"some output")
-        # VTScreen should have been fed (dirty flag set)
-        assert session._vt.dirty is False  # render() marks clean
-        # stdout.write should have been called by renderer, not raw write
-        # The key assertion: no raw write to stdout (renderer handles it)
+        # VTScreen was fed (dirty=True, render is deferred to stdin loop)
+        assert session._vt.dirty is True
+        # Batch render clears dirty
+        session.render_if_dirty()
+        assert session._vt.dirty is False
 
 
 class TestViewerSessionOnChat:
