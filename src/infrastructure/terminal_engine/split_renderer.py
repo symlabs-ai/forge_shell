@@ -55,8 +55,8 @@ class SplitRenderer:
 
     @property
     def left_cols(self) -> int:
-        """Width available for the PTY (left pane)."""
-        return max(1, self._total_cols - self._chat_width - 1)
+        """Width available for the PTY (left pane). Accounts for ' │' separator (2 cols)."""
+        return max(1, self._total_cols - self._chat_width - 2)
 
     def set_focus(self, focus: str) -> None:
         """Set focus to 'terminal' or 'chat'."""
@@ -82,10 +82,10 @@ class SplitRenderer:
         right_w = self._chat_width
         rows = self._total_rows
 
-        # Get left pane content from VTScreen (with ANSI colors)
-        vt_lines = self._vt.get_display_ansi()
-        # Plain text lines for width calculation
-        vt_plain = self._vt.get_display()
+        # Get left pane content from VTScreen, clipped to left_w columns
+        vt_lines = self._vt.get_display_ansi(max_cols=left_w)
+        # Plain text lines for width calculation (clipped)
+        vt_plain = [line[:left_w] for line in self._vt.get_display()]
 
         # Get right pane content from ChatPanel
         chat_lines = self._chat.render_lines()
@@ -158,7 +158,8 @@ class SplitRenderer:
             col = self.left_cols + 2 + self._chat.input_cursor_col  # +2 for " │"
             return f"\033[{row};{col}H".encode()
         elif self._vt is not None:
-            # Cursor at VTScreen cursor position
+            # Cursor at VTScreen cursor position, clamped to left pane
             vt_row, vt_col = self._vt.get_cursor()
+            vt_col = min(vt_col, self.left_cols - 1)
             return f"\033[{vt_row + 1};{vt_col + 1}H".encode()
         return b""

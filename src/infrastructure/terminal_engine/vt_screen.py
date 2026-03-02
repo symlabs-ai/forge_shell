@@ -70,11 +70,15 @@ class VTScreen:
         """Return plain-text lines from the virtual screen buffer."""
         return list(self._screen.display)
 
-    def get_display_ansi(self) -> list[bytes]:
-        """Return ANSI-formatted byte lines preserving colors and attributes."""
+    def get_display_ansi(self, max_cols: int | None = None) -> list[bytes]:
+        """Return ANSI-formatted byte lines preserving colors and attributes.
+
+        Args:
+            max_cols: If set, clip each line to this many visible columns.
+        """
         result: list[bytes] = []
         buf = self._screen.buffer
-        cols = self._screen.columns
+        cols = self._screen.columns if max_cols is None else min(max_cols, self._screen.columns)
         rows = self._screen.lines
         default_char = self._screen.default_char
 

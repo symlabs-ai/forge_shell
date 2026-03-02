@@ -307,11 +307,19 @@ class _ViewerSession:
         self._renderer: SplitRenderer | None = None
         self._router: InputRouter = InputRouter()
 
+    def _ensure_vt(self) -> None:
+        """Lazily create VTScreen at full terminal width to capture output."""
+        if self._vt is None:
+            rows, cols = self._get_terminal_size()
+            self._vt = VTScreen(rows, cols)
+
     # -- callbacks for ViewerClient --
 
     def on_output(self, data: bytes) -> None:
-        if self._chat_active and self._vt and self._renderer:
-            self._vt.feed(data)
+        # Always feed VTScreen to keep it in sync with host PTY
+        self._ensure_vt()
+        self._vt.feed(data)
+        if self._chat_active and self._renderer:
             self._renderer.render()
         else:
             self._stdout.write(data)
@@ -340,8 +348,8 @@ class _ViewerSession:
     def _activate_chat(self) -> None:
         rows, cols = self._get_terminal_size()
         chat_width = 30
-        left_cols = max(1, cols - chat_width - 1)
-        self._vt = VTScreen(rows, left_cols)
+        # Reuse existing VTScreen (already has host terminal state)
+        self._ensure_vt()
         self._chat = ChatPanel(rows, chat_width)
         self._renderer = SplitRenderer(self._stdout, rows, cols, chat_width=chat_width)
         self._renderer.attach(self._vt, self._chat)
@@ -352,7 +360,7 @@ class _ViewerSession:
     def _deactivate_chat(self) -> None:
         if self._renderer:
             self._renderer.detach()
-        self._vt = None
+        # Keep self._vt alive to stay in sync with host PTY
         self._chat = None
         self._renderer = None
         self._chat_active = False
@@ -362,9 +370,8 @@ class _ViewerSession:
             return
         rows, cols = self._get_terminal_size()
         chat_width = 30
-        left_cols = max(1, cols - chat_width - 1)
         if self._vt:
-            self._vt.resize(rows, left_cols)
+            self._vt.resize(rows, cols)  # full width to match host PTY
         if self._chat:
             self._chat.resize(rows, chat_width)
         if self._renderer:

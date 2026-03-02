@@ -20,8 +20,8 @@ class TestSplitRenderer:
 
     def test_left_cols(self):
         renderer, _, _, _ = self._make_renderer(cols=100, chat_width=30)
-        # 100 - 30 - 1 = 69
-        assert renderer.left_cols == 69
+        # 100 - 30 - 2 = 68  (separator " │" takes 2 cols)
+        assert renderer.left_cols == 68
 
     def test_render_produces_output(self):
         renderer, vt, chat, out = self._make_renderer()

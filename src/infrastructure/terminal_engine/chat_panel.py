@@ -146,6 +146,7 @@ class ChatPanel:
         for msg in self._messages:
             color = _ROLE_COLORS.get(msg.role, b"\033[37m")
             tag = f"[{msg.sender}]"
+            is_self = msg.sender == "eu"
             prefix_display_len = len(tag) + 1  # +1 for space
             text_width = max(1, w - prefix_display_len)
             first_line = True
@@ -153,15 +154,31 @@ class ChatPanel:
             while remaining:
                 chunk = remaining[:text_width]
                 remaining = remaining[text_width:]
-                if first_line:
-                    line = color + tag.encode() + _RESET + b" " + chunk.encode()
-                    first_line = False
+                if is_self:
+                    # Right-aligned: text + space + tag
+                    if first_line:
+                        content = chunk.encode() + b" " + color + tag.encode() + _RESET
+                        pad = w - len(chunk) - 1 - len(tag)
+                        line = b" " * max(0, pad) + content
+                        first_line = False
+                    else:
+                        pad = w - len(chunk)
+                        line = b" " * max(0, pad) + chunk.encode()
                 else:
-                    line = b" " * prefix_display_len + chunk.encode()
+                    # Left-aligned: tag + space + text
+                    if first_line:
+                        line = color + tag.encode() + _RESET + b" " + chunk.encode()
+                        first_line = False
+                    else:
+                        line = b" " * prefix_display_len + chunk.encode()
                 rendered_msgs.append(line)
             if first_line:
                 # empty text
-                rendered_msgs.append(color + tag.encode() + _RESET)
+                if is_self:
+                    pad = w - len(tag)
+                    rendered_msgs.append(b" " * max(0, pad) + color + tag.encode() + _RESET)
+                else:
+                    rendered_msgs.append(color + tag.encode() + _RESET)
 
         # Take last msg_area lines (bottom-aligned)
         visible = rendered_msgs[-msg_area:] if msg_area > 0 else []
