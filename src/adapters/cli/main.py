@@ -543,6 +543,9 @@ def _run_prompt(config, prompt: str) -> int:
     """Modo -p: traduz NL → bash, executa e sai."""
     from src.application.usecases.prompt_runner import PromptRunner
 
+    # Silencia logs internos que poluem o output do modo -p
+    logging.getLogger("src").setLevel(logging.CRITICAL)
+
     adapter = ForgeLLMAdapter(
         provider=config.llm.provider,
         model=config.llm.model,
