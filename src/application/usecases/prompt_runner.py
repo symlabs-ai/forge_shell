@@ -24,6 +24,7 @@ import subprocess
 import sys
 
 from src.application.usecases.nl_mode_engine import NLModeEngine
+from src.infrastructure.intelligence.risk_engine import RiskEngine
 
 
 # ANSI helpers
@@ -47,9 +48,11 @@ class PromptRunner:
     def __init__(
         self,
         engine: NLModeEngine,
+        risk_engine: RiskEngine | None = None,
         max_iterations: int = _MAX_SONDA_ITERATIONS,
     ) -> None:
         self._engine = engine
+        self._risk = risk_engine or RiskEngine()
         self._max_iterations = max_iterations
 
     def run(self, prompt: str) -> int:
@@ -105,7 +108,10 @@ class PromptRunner:
             suggestion = result.suggestion
             cmd_str = " && ".join(suggestion.commands)
             explanation = suggestion.explanation
-            risk_level = suggestion.risk_level.value.upper()
+
+            # Use local RiskEngine (pattern-based) — more reliable than LLM
+            local_risk = self._risk.classify(cmd_str)
+            risk_level = local_risk.value.upper()
 
             # HIGH risk: mostra e para
             if risk_level == "HIGH":
@@ -123,6 +129,18 @@ class PromptRunner:
                     "Mesmo comando da tentativa anterior — a investigação convergiu."
                 )
                 self._show_final_output(history[-1])
+                return 0
+
+            # Conclusão via echo — o agente já tem a resposta
+            if self._is_echo_conclusion(cmd_str):
+                if history:
+                    self._show_reflection(explanation)
+                sys.stderr.write(f"\n{_GREEN}[resultado]{_RESET}\n")
+                sys.stderr.flush()
+                # Extrai o conteúdo do echo
+                msg = self._extract_echo_message(cmd_str)
+                sys.stdout.write(msg + "\n")
+                sys.stdout.flush()
                 return 0
 
             # --- Reflexão narrativa (entre sondas) ---
@@ -181,8 +199,8 @@ class PromptRunner:
     ) -> str:
         """Constrói prompt enriquecido com histórico de tentativas.
 
-        Pede ao LLM que EXPLIQUE o raciocínio na explanation:
-        o que deu errado antes e por que está mudando de abordagem.
+        Inclui avaliação explícita de cada resultado e instrui o LLM
+        a concluir quando a investigação já respondeu à pergunta.
         """
         if not history:
             return original
@@ -206,17 +224,61 @@ class PromptRunner:
             if stderr:
                 parts.append(f"Stderr: {self._truncate_output(stderr)}")
 
+            # Avaliação explícita do resultado
+            parts.append(self._evaluate_step(step, original))
+
         parts.append("")
         parts.append(
-            "INSTRUÇÕES PARA A PRÓXIMA TENTATIVA:\n"
-            "1. No campo 'explanation', EXPLIQUE seu raciocínio: "
-            "o que a tentativa anterior tentou, por que não funcionou, "
-            "e qual nova abordagem você vai usar agora.\n"
-            "2. Use um comando DIFERENTE dos anteriores.\n"
-            "3. NÃO repita comandos que já falharam.\n"
-            "4. Considere: find, locate, grep -r, which, whereis, dpkg -L, pip show."
+            "INSTRUÇÕES:\n"
+            "1. AVALIE: o resultado das tentativas anteriores RESPONDE "
+            "à pergunta do usuário?\n"
+            "2. Se SIM (mesmo que a resposta seja 'não encontrado'): "
+            "CONCLUA usando echo, ex: commands: [\"echo 'Resposta aqui'\"]\n"
+            "3. Se NÃO: tente uma abordagem DIFERENTE. No campo "
+            "'explanation', explique por que a anterior não funcionou.\n"
+            "4. NUNCA sugira comandos em caminhos que você não verificou.\n"
+            "5. NUNCA sugira 'ls' em um diretório aleatório como resposta."
         )
         return "\n".join(parts)
+
+    @staticmethod
+    def _evaluate_step(step: dict, original_query: str) -> str:
+        """Avalia se o resultado de uma tentativa responde à pergunta."""
+        output = step.get("output", "").strip()
+        stderr = step.get("stderr", "").strip()
+        rc = step.get("rc", 0)
+        cmd = step.get("cmd", "")
+
+        # find com output vazio = não encontrado
+        if "find " in cmd and not output and rc in (0, 1):
+            return "AVALIAÇÃO: Busca não retornou resultados — o item NÃO existe no caminho buscado."
+
+        # Comando falhou
+        if rc != 0 and not output:
+            return "AVALIAÇÃO: Comando falhou. O resultado NÃO responde à pergunta."
+
+        # Comando teve output — mas é relevante?
+        if output and "echo " not in cmd:
+            return "AVALIAÇÃO: Comando retornou output. Verifique se este output RESPONDE à pergunta original."
+
+        return ""
+
+    @staticmethod
+    def _is_echo_conclusion(cmd: str) -> bool:
+        """Detecta se o comando é uma conclusão via echo (resposta direta)."""
+        stripped = cmd.strip()
+        return stripped.startswith("echo ") or stripped.startswith("echo\t")
+
+    @staticmethod
+    def _extract_echo_message(cmd: str) -> str:
+        """Extrai a mensagem de um comando echo."""
+        stripped = cmd.strip()
+        msg = stripped[5:].strip()  # remove "echo "
+        # Remove aspas envolventes
+        if len(msg) >= 2:
+            if (msg[0] == "'" and msg[-1] == "'") or (msg[0] == '"' and msg[-1] == '"'):
+                msg = msg[1:-1]
+        return msg
 
     @staticmethod
     def _truncate_output(output: str) -> str:

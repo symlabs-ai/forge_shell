@@ -88,6 +88,10 @@ class TerminalSession:
         self._relay_bridge = relay_bridge
         self._stdout = None         # injetado para testes; padrão: sys.stdout.buffer
         self._nl_buffer: bytes = b""  # buffer de linha no NL Mode
+        self._nl_cursor: int = 0      # posição do cursor dentro de _nl_buffer
+        self._nl_history: list[bytes] = []  # histórico de comandos NL
+        self._nl_history_idx: int = -1     # -1 = digitando novo; 0..N = navegando
+        self._nl_saved_input: bytes = b""  # input salvo antes de navegar no histórico
         self._llm_queue: queue.Queue = queue.Queue()  # resultados assíncronos do LLM
         self._llm_pending: bool = False  # evita chamadas simultâneas
         self._llm_cancel: threading.Event = threading.Event()  # sinaliza cancelamento ao LLM thread
@@ -235,16 +239,90 @@ class TerminalSession:
         # fallback: sem interceptor configurado, vai direto para PTY
         self._engine.write(data)
 
+    def _replace_nl_line(self, out, new_buf: bytes) -> None:
+        """Substitui a linha NL atual na tela pelo novo conteúdo."""
+        if not out:
+            return
+        # Apaga da posição do cursor até o início, reescreve tudo
+        old_len = len(self._nl_buffer)
+        cursor_pos = self._nl_cursor
+        # Move cursor para o início da linha digitada
+        if cursor_pos > 0:
+            out.write(f'\x08'.encode() * cursor_pos)
+        # Limpa tudo (old content + possível lixo)
+        out.write(b' ' * old_len + b'\x08' * old_len)
+        # Escreve novo conteúdo
+        out.write(new_buf)
+        out.flush()
+
     def _buffer_nl_input(self, data: bytes) -> None:
         """Acumula input no NL Mode; só chama LLM quando Enter é pressionado."""
         out = self._stdout or getattr(sys.stdout, "buffer", None)
 
-        # Backspace / DEL — remove último byte do buffer e apaga char na tela
-        if data in (b'\x7f', b'\x08'):
-            if self._nl_buffer:
-                self._nl_buffer = self._nl_buffer[:-1]
+        # --- Arrow keys e escape sequences ---
+        if data == b'\x1b[A':  # Up arrow — histórico anterior
+            if not self._nl_history:
+                return
+            if self._nl_history_idx == -1:
+                # Salva input atual antes de navegar
+                self._nl_saved_input = self._nl_buffer
+                self._nl_history_idx = len(self._nl_history) - 1
+            elif self._nl_history_idx > 0:
+                self._nl_history_idx -= 1
+            else:
+                return  # já no início do histórico
+            new_buf = self._nl_history[self._nl_history_idx]
+            self._replace_nl_line(out, new_buf)
+            self._nl_buffer = new_buf
+            self._nl_cursor = len(new_buf)
+            return
+
+        if data == b'\x1b[B':  # Down arrow — histórico seguinte
+            if self._nl_history_idx == -1:
+                return  # não está navegando
+            if self._nl_history_idx < len(self._nl_history) - 1:
+                self._nl_history_idx += 1
+                new_buf = self._nl_history[self._nl_history_idx]
+            else:
+                # Volta ao input original
+                self._nl_history_idx = -1
+                new_buf = self._nl_saved_input
+            self._replace_nl_line(out, new_buf)
+            self._nl_buffer = new_buf
+            self._nl_cursor = len(new_buf)
+            return
+
+        if data == b'\x1b[C':  # Right arrow
+            if self._nl_cursor < len(self._nl_buffer):
+                self._nl_cursor += 1
                 if out:
-                    out.write(b'\x08 \x08')
+                    out.write(data)
+                    out.flush()
+            return
+
+        if data == b'\x1b[D':  # Left arrow
+            if self._nl_cursor > 0:
+                self._nl_cursor -= 1
+                if out:
+                    out.write(data)
+                    out.flush()
+            return
+
+        # Ignorar outras escape sequences (Home, End, PgUp, etc.)
+        if data.startswith(b'\x1b'):
+            return
+
+        # Backspace / DEL — remove byte na posição do cursor
+        if data in (b'\x7f', b'\x08'):
+            if self._nl_buffer and self._nl_cursor > 0:
+                pos = self._nl_cursor
+                before = self._nl_buffer[:pos - 1]
+                after = self._nl_buffer[pos:]
+                self._nl_buffer = before + after
+                self._nl_cursor -= 1
+                if out:
+                    # Move back, rewrite tail, clear extra char, reposition
+                    out.write(b'\x08' + after + b' ' + b'\x08' * (len(after) + 1))
                     out.flush()
             return
 
@@ -263,6 +341,7 @@ class TerminalSession:
                     out.flush()
             else:
                 self._nl_buffer = b""
+                self._nl_cursor = 0
                 self._engine.write(data)
             return
 
@@ -276,6 +355,12 @@ class TerminalSession:
                 self._nl_buffer += pre
             full = self._nl_buffer
             self._nl_buffer = b""
+            self._nl_cursor = 0
+            self._nl_history_idx = -1
+            # Salva no histórico (se não vazio e diferente do último)
+            if full.strip():
+                if not self._nl_history or self._nl_history[-1] != full.strip():
+                    self._nl_history.append(full.strip())
             _tlog.debug("ENTER received | full=%r | mode=%s | pty_running=%s | llm_pending=%s",
                         full, self._mode, self._pty_running, self._llm_pending)
             if out:
@@ -357,11 +442,26 @@ class TerminalSession:
                 self._engine.write(b'\r')
             return
 
-        # Caractere normal — acumula e faz echo local (não vai ao PTY)
-        self._nl_buffer += data
-        if out:
-            out.write(data)
-            out.flush()
+        # Caractere normal — insere na posição do cursor, echo local
+        pos = self._nl_cursor
+        if pos >= len(self._nl_buffer):
+            # Append simples (caso comum)
+            self._nl_buffer += data
+            self._nl_cursor += len(data)
+            if out:
+                out.write(data)
+                out.flush()
+        else:
+            # Inserção no meio da linha
+            before = self._nl_buffer[:pos]
+            after = self._nl_buffer[pos:]
+            self._nl_buffer = before + data + after
+            self._nl_cursor += len(data)
+            if out:
+                out.write(data + after + b'\x08' * len(after))
+                out.flush()
+        # Reset history navigation quando o usuário digita algo novo
+        self._nl_history_idx = -1
 
     def _sync_renderer(self) -> None:
         """Sync renderer references (needed when tests replace _engine/_stdout)."""

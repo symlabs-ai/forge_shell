@@ -559,13 +559,14 @@ def _run_prompt(config, prompt: str) -> int:
             api_key=config.llm.api_key,
             agent_config=config.agent,
         )
+    risk_engine = RiskEngine()
     engine = NLModeEngine(
         llm_adapter=adapter,
-        risk_engine=RiskEngine(),
+        risk_engine=risk_engine,
         agent_service=agent_service,
         default_active=True,
     )
-    runner = PromptRunner(engine)
+    runner = PromptRunner(engine, risk_engine=risk_engine)
     return runner.run(prompt)
 
 

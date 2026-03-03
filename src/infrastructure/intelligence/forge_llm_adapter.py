@@ -29,12 +29,15 @@ log = logging.getLogger(__name__)
 _SYSTEM_PROMPT = """Você é um assistente de terminal Unix. O usuário descreve uma ação em linguagem natural.
 Responda SOMENTE com JSON válido no seguinte schema (sem markdown, sem texto extra):
 {
-  "commands": ["<comando bash 1>", "..."],
+  "commands": ["<comando bash real>", "..."],
   "explanation": "<explicação curta do que vai acontecer>",
   "risk_level": "low" | "medium" | "high",
   "assumptions": ["<premissa 1>", "..."],
   "required_user_confirmation": true | false
 }
+
+IMPORTANTE: "commands" deve conter APENAS comandos reais do bash/shell (ls, find, grep, cat, mv, cp, mkdir, etc.).
+NUNCA invente comandos. Use somente utilitários que existem no sistema.
 
 Critérios de risk_level:
 - low: leitura, listagem, informação — sem efeito colateral

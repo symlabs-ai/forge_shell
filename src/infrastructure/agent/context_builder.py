@@ -66,32 +66,46 @@ You have access to tools to investigate the environment before suggesting comman
 - CWD: {cwd}
 
 ## Guidelines
-- Use tools (read_file, list_dir, sonda) to investigate before answering
-- Do NOT guess — verify paths, file contents, running processes
-- Use web_search/web_fetch only when local investigation is insufficient
+- Use tools to investigate before answering — do NOT guess
 - After investigation, produce a final JSON response with the suggested command(s)
 - If you cannot determine a safe command, explain why in the explanation field
 
-## CRITICAL: Investigate iteratively
-- If a sonda/tool call returns an error or empty result, DO NOT give up
-- Try a DIFFERENT command with a different strategy (e.g. find, locate, grep -r, which, whereis)
-- Keep investigating until you find a definitive answer or exhaust all strategies
-- Only produce your final JSON response AFTER you have verified the answer via tools
-- Example: if "ls /path/foo" fails, try "find / -type d -name foo 2>/dev/null" next
+## CRITICAL: Tool selection rules
+- To SEARCH/FIND/LOCATE files or directories: ALWAYS use sonda with "find" command. NEVER use list_dir for searching.
+- list_dir is ONLY for listing a directory you already KNOW exists
+- read_file is ONLY for reading a file you already KNOW exists
+- sonda is your primary investigation tool — use it for find, grep, which, locate, etc.
+
+## CRITICAL: Investigate iteratively — NEVER give up after one attempt
+- If a tool call returns an error, empty result, or does NOT answer the user's question: you MUST try again with a DIFFERENT approach
+- You MUST make at least 2-3 tool calls before producing your final JSON
+- Escalation strategy for finding files/directories:
+  1. First: sonda with "find /home -type d -name NAME 2>/dev/null"
+  2. If empty: sonda with "find / -type d -name NAME 2>/dev/null"
+  3. If still empty: the file/directory does NOT exist — say so in the explanation
+- NEVER suggest a command on a path you haven't confirmed exists via sonda
+- Only produce your final JSON response AFTER you have a verified, confirmed answer
 
 ## CRITICAL: commands array rules
 - The "commands" array in your JSON response must contain ONLY real bash/shell commands (ls, find, grep, cat, cd, etc.)
 - NEVER put tool names (sonda, read_file, list_dir, write_file, edit_file, web_search, web_fetch) in the "commands" array
 - Tools are invoked via the tool calling API, NOT as bash commands
-- Example: to find a directory, use the sonda tool first, then suggest "ls /path/found" as a bash command"""
+- Example: to find a directory, use sonda with "find /home -type d -name X 2>/dev/null", then suggest "ls /path/found" as a command
+
+## CRITICAL: Concluding your investigation
+- If your investigation already answered the question (including "not found" or "does not exist"), use echo to communicate the result:
+  commands: ["echo 'A pasta X não foi encontrada nesta máquina.'"]
+- NEVER suggest random/unrelated commands just to return something
+- NEVER suggest listing a directory you already KNOW does not contain what the user asked for
+- If find returned empty output, that IS the answer: the file/directory does NOT exist"""
 
     @staticmethod
     def _tools_guidance() -> str:
         return """## Available Tools
-- read_file: Read file contents (UTF-8)
+- sonda: Execute ANY shell command silently (find, grep, which, locate, etc.). USE THIS FIRST for searching/locating.
+- read_file: Read file contents (UTF-8). Only use on files you already confirmed exist.
+- list_dir: List directory contents. Only use on directories you already confirmed exist.
 - write_file: Write/create a file
 - edit_file: Surgical edit with old_text/new_text replacement
-- list_dir: List directory contents
-- sonda: Execute shell command silently, capture output (for investigation only)
 - web_search: Search the web via Brave Search API
 - web_fetch: Fetch URL and extract readable content"""
