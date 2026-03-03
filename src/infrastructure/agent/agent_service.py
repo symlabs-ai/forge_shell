@@ -68,6 +68,10 @@ class AgentService(AgentPort):
         # Context builder
         self._context_builder = AgentContextBuilder(memory=self._memory)
 
+        # Conversation history (user/assistant pairs for context)
+        self._conversation_history: list[ChatMessage] = []
+        self._max_history_pairs = 5  # keep last N exchanges
+
         # Interaction tracking for memory consolidation
         self._interactions: list[dict[str, str]] = []
         self._interaction_count = 0
@@ -97,6 +101,7 @@ class AgentService(AgentPort):
 
         messages = [
             ChatMessage(role="system", content=system_prompt),
+            *self._conversation_history,
             ChatMessage(role="user", content=user_prompt),
         ]
 
@@ -151,7 +156,24 @@ class AgentService(AgentPort):
 
             result = self._parse(raw_content)
 
-            # Track interaction for memory
+            # Track conversation history for context
+            self._conversation_history.append(
+                ChatMessage(role="user", content=user_prompt)
+            )
+            if result:
+                # Store a concise summary as assistant response
+                summary = f"Commands: {result.commands} | {result.explanation}"
+            else:
+                summary = raw_content[:200] if raw_content else "(no response)"
+            self._conversation_history.append(
+                ChatMessage(role="assistant", content=summary)
+            )
+            # Trim history to max pairs
+            max_msgs = self._max_history_pairs * 2
+            if len(self._conversation_history) > max_msgs:
+                self._conversation_history = self._conversation_history[-max_msgs:]
+
+            # Track interaction for memory consolidation
             ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
             self._interactions.append({"timestamp": ts, "role": "user", "content": text})
             if result:
