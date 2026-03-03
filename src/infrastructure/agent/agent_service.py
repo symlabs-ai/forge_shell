@@ -41,6 +41,7 @@ class AgentService(AgentPort):
         provider: str,
         model: str,
         api_key: str | None = None,
+        base_url: str | None = None,
         agent_config: AgentConfig | None = None,
     ) -> None:
         self._cfg = agent_config or AgentConfig()
@@ -50,11 +51,15 @@ class AgentService(AgentPort):
         self._register_tools()
 
         # Build LLM agent with tools
+        kwargs: dict = {}
+        if base_url:
+            kwargs["base_url"] = base_url
         self._agent = ChatAgent(
             provider=provider,
             api_key=api_key,
             model=model,
             tools=self._registry,
+            **kwargs,
         )
         self._config = ChatConfig(temperature=0.2)
 

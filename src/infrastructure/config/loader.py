@@ -47,8 +47,9 @@ class NLModeConfig:
 @dataclass
 class LLMConfig:
     api_key: str | None = None
-    provider: str = "ollama"         # ollama | openai | anthropic | openrouter
+    provider: str = "ollama"         # ollama | openai | anthropic | openrouter | symrouter
     model: str = "llama3.2"
+    base_url: str | None = None      # base URL para providers remotos (ex: symrouter)
     timeout_seconds: int = 30
     max_retries: int = 2
 
@@ -244,6 +245,7 @@ class ConfigLoader:
             api_key=llm_raw.get("api_key", None),
             provider=llm_raw.get("provider", "ollama"),
             model=llm_raw.get("model", "llama3.2"),
+            base_url=llm_raw.get("base_url", None),
             timeout_seconds=llm_raw.get("timeout_seconds", 30),
             max_retries=llm_raw.get("max_retries", 2),
         )

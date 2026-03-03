@@ -330,6 +330,7 @@ def _build_session(
             provider=config.llm.provider,
             model=config.llm.model,
             api_key=config.llm.api_key,
+            base_url=config.llm.base_url,
             timeout_seconds=config.llm.timeout_seconds,
             max_retries=config.llm.max_retries,
         )
@@ -339,6 +340,7 @@ def _build_session(
                 provider=config.llm.provider,
                 model=config.llm.model,
                 api_key=config.llm.api_key,
+                base_url=config.llm.base_url,
                 agent_config=config.agent,
             )
         engine = NLModeEngine(
@@ -548,6 +550,7 @@ def _run_prompt(config, prompt: str) -> int:
         provider=config.llm.provider,
         model=config.llm.model,
         api_key=config.llm.api_key,
+        base_url=config.llm.base_url,
         timeout_seconds=config.llm.timeout_seconds,
         max_retries=config.llm.max_retries,
     )
@@ -557,6 +560,7 @@ def _run_prompt(config, prompt: str) -> int:
             provider=config.llm.provider,
             model=config.llm.model,
             api_key=config.llm.api_key,
+            base_url=config.llm.base_url,
             agent_config=config.agent,
         )
     risk_engine = RiskEngine()

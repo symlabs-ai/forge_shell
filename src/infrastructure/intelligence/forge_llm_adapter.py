@@ -84,6 +84,7 @@ class ForgeLLMAdapter(LLMPort):
         api_key: str | None = None,
         provider: str = "ollama",
         model: str = "llama3",
+        base_url: str | None = None,
         timeout_seconds: int = 30,
         max_retries: int = 2,
         max_history: int = 5,
@@ -91,6 +92,7 @@ class ForgeLLMAdapter(LLMPort):
         self._provider = provider
         self._model = model
         self._api_key = api_key
+        self._base_url = base_url
         self._timeout = timeout_seconds
         self._max_retries = max_retries
         self._agent = None  # lazy: criado na primeira chamada a request()/explain()
@@ -106,8 +108,12 @@ class ForgeLLMAdapter(LLMPort):
             resolved_key = self._api_key or os.environ.get(
                 self._ENV_KEY_MAP.get(self._provider, ""), None
             )
+            kwargs: dict = {}
+            if self._base_url:
+                kwargs["base_url"] = self._base_url
             self._agent = ChatAgent(
-                provider=self._provider, api_key=resolved_key, model=self._model
+                provider=self._provider, api_key=resolved_key, model=self._model,
+                **kwargs,
             )
         return self._agent
 
