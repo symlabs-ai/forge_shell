@@ -6,14 +6,17 @@ Recebe uma query em linguagem natural e usa um loop de investigação
 
 1. Traduz NL → bash via NLModeEngine
 2. Executa silenciosamente (captura output)
-3. Alimenta o output de volta ao LLM como contexto
-4. Repete até resolver ou atingir max_iterations
+3. Ecoa o passo + resumo do output para o usuário
+4. Alimenta o output de volta ao LLM como contexto
+5. Repete até resolver ou atingir max_iterations
 
-A cada iteração, ecoa o processo de reflexão para o usuário.
+A cada iteração, ecoa o processo de reflexão para o usuário:
+o que foi tentado, o que a sonda devolveu, e por que está mudando
+de estratégia.
 
 Exit codes:
 - 0: resolvido com sucesso
-- 1: erro (LLM falhou, parse falhou)
+- 1: erro (LLM falhou em TODAS as tentativas)
 - 2: risco HIGH (não executado)
 """
 from __future__ import annotations
@@ -53,14 +56,19 @@ class PromptRunner:
     def run(self, prompt: str) -> int:
         """Processa o prompt com loop iterativo e retorna exit code."""
         context = {"cwd": os.getcwd()}
-        history: list[dict] = []  # [{cmd, output, explanation}]
+        history: list[dict] = []  # [{cmd, output, stderr, explanation, rc}]
+        llm_failures = 0
 
         for iteration in range(self._max_iterations):
             # Monta prompt enriquecido com histórico
             enriched_prompt = self._build_enriched_prompt(prompt, history)
 
             # Indicador de progresso
-            label = "pensando" if iteration == 0 else "refletindo"
+            step_num = len(history) + 1
+            if not history:
+                label = "pensando"
+            else:
+                label = f"refletindo sobre sonda {len(history)}"
             sys.stderr.write(f"{_CYAN}[forge_shell: {label}")
             sys.stderr.flush()
 
@@ -77,16 +85,14 @@ class PromptRunner:
             sys.stderr.write(f"]{_RESET}\n")
             sys.stderr.flush()
 
-            # Falha do LLM
+            # Falha do LLM — NÃO desiste, tenta de novo
             if result is None or result.suggestion is None:
-                if history:
-                    # Temos resultado anterior — mostra o que tem
-                    self._show_final_output(history[-1])
-                    return 0
+                llm_failures += 1
                 sys.stderr.write(
-                    f"{_RED}[forge_shell] Falha ao processar prompt.{_RESET}\n"
+                    f"{_YELLOW}   LLM não retornou sugestão válida, "
+                    f"tentando novamente...{_RESET}\n"
                 )
-                return 1
+                continue
 
             suggestion = result.suggestion
             cmd_str = " && ".join(suggestion.commands)
@@ -95,43 +101,62 @@ class PromptRunner:
 
             # HIGH risk: mostra e para
             if risk_level == "HIGH":
-                self._show_sonda_step(iteration + 1, cmd_str, explanation, risk_level)
+                self._show_sonda_step(step_num, cmd_str, explanation, risk_level)
                 sys.stderr.write(
-                    f"{_RED}[!] Risco ALTO — comando não executado.{_RESET}\n"
+                    f"   {_RED}[!] Risco ALTO — comando não executado.{_RESET}\n"
                 )
                 return 2
 
             # Comando repetido — LLM acha que já resolveu
             if history and cmd_str == history[-1]["cmd"]:
+                sys.stderr.write(
+                    f"{_DIM}   (mesmo comando da tentativa anterior — "
+                    f"encerrando investigação){_RESET}\n"
+                )
                 self._show_final_output(history[-1])
                 return 0
 
             # Executa silenciosamente (sonda-style)
-            proc = subprocess.run(
-                cmd_str,
-                shell=True,
-                capture_output=True,
-                cwd=os.getcwd(),
-                timeout=60,
-            )
-            stdout = proc.stdout.decode(errors="replace")
-            stderr = proc.stderr.decode(errors="replace")
+            try:
+                proc = subprocess.run(
+                    cmd_str,
+                    shell=True,
+                    capture_output=True,
+                    cwd=os.getcwd(),
+                    timeout=60,
+                )
+                stdout = proc.stdout.decode(errors="replace")
+                stderr = proc.stderr.decode(errors="replace")
+                rc = proc.returncode
+            except subprocess.TimeoutExpired:
+                stdout = ""
+                stderr = "Timeout: comando excedeu 60 segundos"
+                rc = 124
 
-            step = {"cmd": cmd_str, "output": stdout, "stderr": stderr, "explanation": explanation}
+            step = {
+                "cmd": cmd_str,
+                "output": stdout,
+                "stderr": stderr,
+                "explanation": explanation,
+                "rc": rc,
+            }
             history.append(step)
 
-            # Ecoa o passo de investigação para o usuário
-            self._show_sonda_step(iteration + 1, cmd_str, explanation, risk_level)
+            # Ecoa o passo + resumo do output
+            self._show_sonda_step(step_num, cmd_str, explanation, risk_level)
+            self._show_sonda_output_summary(step)
 
-            # Última iteração — mostra output final
-            if iteration == self._max_iterations - 1:
-                self._show_final_output(step)
-                return proc.returncode
+        # Loop encerrado — mostra o melhor resultado que temos
+        best = self._pick_best_result(history)
+        if best:
+            self._show_final_output(best)
+            return best.get("rc", 0)
 
-        # Fallback (não deve chegar aqui)
-        if history:
-            self._show_final_output(history[-1])
-        return 0
+        sys.stderr.write(
+            f"\n{_RED}[forge_shell] Não foi possível resolver após "
+            f"{self._max_iterations} tentativas.{_RESET}\n"
+        )
+        return 1
 
     def _build_enriched_prompt(
         self, original: str, history: list[dict]
@@ -142,18 +167,29 @@ class PromptRunner:
 
         parts = [f"Pedido original: {original}", "", "Tentativas anteriores:"]
         for i, step in enumerate(history, 1):
-            output_preview = self._truncate_output(step["output"])
-            parts.append(f"{i}. Comando: {step['cmd']}")
-            if output_preview:
-                parts.append(f"   Output: {output_preview}")
+            parts.append(f"\n--- Tentativa {i} ---")
+            parts.append(f"Comando: {step['cmd']}")
+
+            output = step.get("output", "").strip()
+            stderr = step.get("stderr", "").strip()
+            rc = step.get("rc", 0)
+
+            if rc != 0:
+                parts.append(f"Exit code: {rc} (ERRO)")
+            if output:
+                preview = self._truncate_output(output)
+                parts.append(f"Stdout: {preview}")
             else:
-                parts.append("   Output: (vazio — o comando não encontrou nada)")
+                parts.append("Stdout: (vazio)")
+            if stderr:
+                parts.append(f"Stderr: {self._truncate_output(stderr)}")
 
         parts.append("")
         parts.append(
-            "Os comandos anteriores NÃO resolveram o pedido. "
-            "Mude de estratégia: use um comando DIFERENTE dos anteriores. "
-            "Dicas: find, locate, grep -r, which, whereis são boas opções para buscas."
+            "ANÁLISE: Os comandos anteriores NÃO resolveram o pedido do usuário. "
+            "Você DEVE usar uma estratégia DIFERENTE das anteriores. "
+            "NÃO repita comandos que já falharam. "
+            "Considere: find, locate, grep -r, which, whereis, dpkg -L, pip show."
         )
         return "\n".join(parts)
 
@@ -176,9 +212,52 @@ class PromptRunner:
         sys.stderr.write(
             f"\n{_MAGENTA}[sonda {step_num}]{_RESET} {_BOLD}{cmd}{_RESET}\n"
         )
-        sys.stderr.write(f"   {_DIM}{explanation}{_RESET}\n")
+        sys.stderr.write(f"   {explanation}\n")
         sys.stderr.write(f"   Risco: {risk_color}{risk_level.lower()}{_RESET}\n")
         sys.stderr.flush()
+
+    @staticmethod
+    def _show_sonda_output_summary(step: dict) -> None:
+        """Mostra resumo do output da sonda para o usuário acompanhar."""
+        output = step.get("output", "").strip()
+        stderr = step.get("stderr", "").strip()
+        rc = step.get("rc", 0)
+
+        if rc != 0 and stderr:
+            # Comando falhou — mostra o erro
+            first_line = stderr.splitlines()[0][:120]
+            sys.stderr.write(f"   {_RED}→ erro: {first_line}{_RESET}\n")
+        elif output:
+            # Comando teve output — mostra resumo
+            lines = output.splitlines()
+            if len(lines) == 1:
+                preview = lines[0][:120]
+                sys.stderr.write(f"   {_GREEN}→ {preview}{_RESET}\n")
+            else:
+                first = lines[0][:80]
+                sys.stderr.write(
+                    f"   {_GREEN}→ {first}  {_DIM}(+{len(lines) - 1} linhas){_RESET}\n"
+                )
+        else:
+            sys.stderr.write(f"   {_YELLOW}→ (sem output){_RESET}\n")
+
+        sys.stderr.flush()
+
+    @staticmethod
+    def _pick_best_result(history: list[dict]) -> dict | None:
+        """Escolhe o melhor resultado do histórico (prefere output com conteúdo)."""
+        if not history:
+            return None
+        # Prefere o último passo que teve output com sucesso
+        for step in reversed(history):
+            if step.get("output", "").strip() and step.get("rc", 1) == 0:
+                return step
+        # Senão, prefere qualquer um com output
+        for step in reversed(history):
+            if step.get("output", "").strip():
+                return step
+        # Senão, o último
+        return history[-1]
 
     @staticmethod
     def _show_final_output(step: dict) -> None:
