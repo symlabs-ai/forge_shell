@@ -3,6 +3,7 @@ forge_shell — CLI entrypoint.
 
 Uso:
     forge_shell               Inicia sessão local (NL Mode ativo por padrão)
+    forge_shell -p "query"    Modo one-shot: traduz NL→bash, executa e sai
     forge_shell share         Inicia sessão compartilhada via relay e exibe token
     forge_shell doctor        Diagnóstico do terminal engine
     forge_shell attach <id>   Reconecta a uma sessão existente pelo session-id
@@ -86,6 +87,11 @@ def build_parser() -> argparse.ArgumentParser:
             "PTY ou de camadas superiores do forge_shell. Comportamento idêntico ao "
             "Bash padrão — nenhuma feature do forge_shell é ativada."
         ),
+    )
+    parser.add_argument(
+        "-p", "--prompt",
+        type=str,
+        help="Executa query NL one-shot (traduz → executa → sai)",
     )
 
     subparsers = parser.add_subparsers(dest="command", metavar="<command>")
@@ -533,9 +539,42 @@ class _ViewerSession:
             self._renderer.render()
 
 
+def _run_prompt(config, prompt: str) -> int:
+    """Modo -p: traduz NL → bash, executa e sai."""
+    from src.application.usecases.prompt_runner import PromptRunner
+
+    adapter = ForgeLLMAdapter(
+        provider=config.llm.provider,
+        model=config.llm.model,
+        api_key=config.llm.api_key,
+        timeout_seconds=config.llm.timeout_seconds,
+        max_retries=config.llm.max_retries,
+    )
+    agent_service = None
+    if config.agent.enabled:
+        agent_service = AgentService(
+            provider=config.llm.provider,
+            model=config.llm.model,
+            api_key=config.llm.api_key,
+            agent_config=config.agent,
+        )
+    engine = NLModeEngine(
+        llm_adapter=adapter,
+        risk_engine=RiskEngine(),
+        agent_service=agent_service,
+        default_active=True,
+    )
+    runner = PromptRunner(engine)
+    return runner.run(prompt)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.prompt:
+        config = ConfigLoader().load()
+        return _run_prompt(config, args.prompt)
 
     if args.command == "config":
         action = getattr(args, "config_action", None) or "show"
