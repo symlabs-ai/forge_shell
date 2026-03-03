@@ -27,6 +27,7 @@ logging.getLogger("httpcore").setLevel(logging.CRITICAL)
 logging.getLogger("websockets").setLevel(logging.CRITICAL)
 logging.getLogger("websockets.server").setLevel(logging.CRITICAL)
 logging.getLogger("websockets.legacy").setLevel(logging.CRITICAL)
+logging.getLogger("src").setLevel(logging.CRITICAL)  # AgentService, adapters internos
 logging.getLogger().handlers = []  # remove root StreamHandler → sem ruído no PTY
 
 from src.application.usecases.terminal_session import TerminalSession
@@ -542,9 +543,6 @@ class _ViewerSession:
 def _run_prompt(config, prompt: str) -> int:
     """Modo -p: traduz NL → bash, executa e sai."""
     from src.application.usecases.prompt_runner import PromptRunner
-
-    # Silencia logs internos que poluem o output do modo -p
-    logging.getLogger("src").setLevel(logging.CRITICAL)
 
     adapter = ForgeLLMAdapter(
         provider=config.llm.provider,
