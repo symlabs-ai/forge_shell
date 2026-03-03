@@ -313,12 +313,26 @@ class TerminalSession:
                     _out = out  # captura para closure da thread
                     _cancel = self._llm_cancel  # captura event de cancelamento
 
+                    _pensando_open = [True]  # flag: estamos dentro de [pensando...]
+
                     def _on_chunk(chunk_text: str) -> None:
                         if _cancel.is_set():
                             raise KeyboardInterrupt  # interrompe stream_chat()
                         if _out:
-                            _out.write(b'.')
-                            _out.flush()
+                            if chunk_text.startswith("\n"):
+                                # Investigação (sonda) — fecha pensando, mostra, reabre
+                                if _pensando_open[0]:
+                                    _out.write(b']\033[0m\r\n')
+                                    _pensando_open[0] = False
+                                _out.write(chunk_text.encode() + b'\r\n')
+                                _out.flush()
+                            else:
+                                # Token de pensamento — reabre indicador se fechou
+                                if not _pensando_open[0]:
+                                    _out.write(b'\033[36m[forge_shell: pensando')
+                                    _pensando_open[0] = True
+                                _out.write(b'.')
+                                _out.flush()
 
                     def _llm_thread(text: bytes) -> None:
                         t_start = time.monotonic()
@@ -331,7 +345,8 @@ class TerminalSession:
                             # Ctrl-C já escreveu o fechamento e resetou o estado
                             return
                         if _out:
-                            _out.write(b']\033[0m\r\n')
+                            if _pensando_open[0]:
+                                _out.write(b']\033[0m\r\n')
                             _out.flush()
                         _tlog.debug("  LLM thread done in %.3fs", time.monotonic() - t_start)
                         llm_q.put(res)

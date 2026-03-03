@@ -107,7 +107,44 @@ class AgentService(AgentPort):
                 config=self._config,
                 auto_execute_tools=True,
             ):
-                if chunk.content and chunk.role == "assistant":
+                # Tool call — emit sonda activity
+                if (
+                    chunk.role == "assistant"
+                    and chunk.finish_reason == "tool_calls"
+                    and chunk.tool_calls
+                    and on_chunk is not None
+                ):
+                    for tc in chunk.tool_calls:
+                        func = tc.get("function", {})
+                        name = func.get("name", "?")
+                        args = func.get("arguments", {})
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+                        if name == "sonda" and isinstance(args, dict):
+                            cmd = args.get("command", "")
+                            on_chunk(f"\n\033[35m[sonda]\033[0m {cmd}")
+                        elif name in ("list_dir", "read_file"):
+                            path = args.get("path", "") if isinstance(args, dict) else str(args)
+                            on_chunk(f"\n\033[35m[{name}]\033[0m {path}")
+
+                # Tool result — emit output summary
+                elif chunk.role == "tool" and chunk.content and on_chunk is not None:
+                    content = chunk.content
+                    if content.startswith("[Tool "):
+                        content = content.split("]: ", 1)[-1]
+                    lines = content.strip().splitlines()
+                    if lines:
+                        first = lines[0][:100]
+                        if len(lines) > 1:
+                            on_chunk(f"\n\033[32m   → {first}  \033[2m(+{len(lines)-1} linhas)\033[0m")
+                        else:
+                            on_chunk(f"\n\033[32m   → {first}\033[0m")
+
+                # Regular assistant content
+                elif chunk.content and chunk.role == "assistant":
                     raw_content += chunk.content
                     if on_chunk is not None:
                         on_chunk(chunk.content)
@@ -169,8 +206,41 @@ class AgentService(AgentPort):
             parts.append(f"Recent terminal output:\n{last_lines}")
         return "\n".join(parts)
 
-    @staticmethod
-    def _parse(content: str) -> NLResponse | None:
+    # Tool names that must never appear as bash commands, with bash equivalents
+    _TOOL_BASH_MAP: dict[str, str | None] = {
+        "sonda": None,       # sonda wraps a real command — just strip the prefix
+        "read_file": "cat",  # read_file <path> → cat <path>
+        "list_dir": "ls",    # list_dir <path> → ls <path>
+        "write_file": None,  # no safe equivalent
+        "edit_file": None,   # no safe equivalent
+        "web_search": None,  # no bash equivalent
+        "web_fetch": "curl", # web_fetch <url> → curl <url>
+    }
+
+    @classmethod
+    def _sanitize_commands(cls, commands: list[str]) -> list[str]:
+        """Replace tool name prefixes that the LLM mistakenly placed in commands."""
+        sanitized: list[str] = []
+        for cmd in commands:
+            first_token = cmd.split()[0] if cmd.strip() else ""
+            if first_token in cls._TOOL_BASH_MAP:
+                rest = cmd[len(first_token):].strip()
+                replacement = cls._TOOL_BASH_MAP[first_token]
+                if rest:
+                    if replacement:
+                        fixed = f"{replacement} {rest}"
+                    else:
+                        fixed = rest
+                    log.info("Fixed tool-as-command '%s' → '%s'", cmd, fixed)
+                    sanitized.append(fixed)
+                else:
+                    log.warning("Rejected tool-only command: %s", cmd)
+            else:
+                sanitized.append(cmd)
+        return sanitized
+
+    @classmethod
+    def _parse(cls, content: str) -> NLResponse | None:
         """Parse LLM JSON response into NLResponse."""
         # Strip markdown code fences if present
         cleaned = content.strip()
@@ -187,8 +257,12 @@ class AgentService(AgentPort):
             return None
 
         try:
+            commands = cls._sanitize_commands(data["commands"])
+            if not commands:
+                log.warning("AgentService: all commands were tool names, rejected")
+                return None
             return NLResponse(
-                commands=data["commands"],
+                commands=commands,
                 explanation=data["explanation"],
                 risk_level=RiskLevel(data["risk_level"]),
                 assumptions=data.get("assumptions", []),

@@ -66,10 +66,23 @@ class PromptRunner:
             else:
                 sys.stderr.write(f"{_CYAN}[forge_shell: reformulando")
             sys.stderr.flush()
+            _indicator_open = True
 
             def on_chunk(_chunk: str) -> None:
-                sys.stderr.write(".")
-                sys.stderr.flush()
+                nonlocal _indicator_open
+                if _chunk.startswith("\n"):
+                    # Atividade de sonda interna do agent — mostra como texto
+                    if _indicator_open:
+                        sys.stderr.write(f"]{_RESET}\n")
+                        _indicator_open = False
+                    sys.stderr.write(_chunk + "\n")
+                    sys.stderr.flush()
+                else:
+                    if not _indicator_open:
+                        sys.stderr.write(f"{_CYAN}[forge_shell: pensando")
+                        _indicator_open = True
+                    sys.stderr.write(".")
+                    sys.stderr.flush()
 
             result = self._engine.process_input(
                 text=enriched_prompt,
@@ -77,8 +90,9 @@ class PromptRunner:
                 on_chunk=on_chunk,
             )
 
-            sys.stderr.write(f"]{_RESET}\n")
-            sys.stderr.flush()
+            if _indicator_open:
+                sys.stderr.write(f"]{_RESET}\n")
+                sys.stderr.flush()
 
             # Falha do LLM — NÃO desiste, tenta de novo
             if result is None or result.suggestion is None:
