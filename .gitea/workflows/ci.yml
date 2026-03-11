@@ -20,7 +20,7 @@ jobs:
           mkdir -p "$DEPS_DIR"
           git clone "$CLONE_URL/symlabs-ai/forge_llm.git" "$DEPS_DIR/forge_llm"
           pip install "$DEPS_DIR/forge_llm"
-          pip install -e ".[dev]"
+          pip install -e ".[dev,shell]"
           rm -rf "$DEPS_DIR"
 
       - name: Lint
