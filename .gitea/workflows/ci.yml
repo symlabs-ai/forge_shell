@@ -13,13 +13,14 @@ jobs:
 
       - name: Setup
         run: |
+          DEPS_DIR="/tmp/ci-deps-$$"
           python3 -m venv .venv
           . .venv/bin/activate
-          rm -rf /tmp/ci-deps && mkdir -p /tmp/ci-deps
-          git clone http://localhost:8070/symlabs-ai/forge_llm.git /tmp/ci-deps/forge_llm
-          pip install /tmp/ci-deps/forge_llm
+          mkdir -p "$DEPS_DIR"
+          git clone http://localhost:8070/symlabs-ai/forge_llm.git "$DEPS_DIR/forge_llm"
+          pip install "$DEPS_DIR/forge_llm"
           pip install -e ".[dev]"
-          rm -rf /tmp/ci-deps
+          rm -rf "$DEPS_DIR"
 
       - name: Lint
         run: |
