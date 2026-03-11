@@ -14,10 +14,11 @@ jobs:
       - name: Setup
         run: |
           DEPS_DIR="/tmp/ci-deps-$$"
+          CLONE_URL="http://token:${{ github.token }}@localhost:8070"
           python3 -m venv .venv
           . .venv/bin/activate
           mkdir -p "$DEPS_DIR"
-          git clone http://localhost:8070/symlabs-ai/forge_llm.git "$DEPS_DIR/forge_llm"
+          git clone "$CLONE_URL/symlabs-ai/forge_llm.git" "$DEPS_DIR/forge_llm"
           pip install "$DEPS_DIR/forge_llm"
           pip install -e ".[dev]"
           rm -rf "$DEPS_DIR"
