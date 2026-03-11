@@ -15,9 +15,11 @@ jobs:
         run: |
           python3 -m venv .venv
           . .venv/bin/activate
-          git clone http://localhost:8070/symlabs-ai/forge_llm.git /tmp/ci-forge_llm
-          pip install /tmp/ci-forge_llm
+          rm -rf /tmp/ci-deps && mkdir -p /tmp/ci-deps
+          git clone http://localhost:8070/symlabs-ai/forge_llm.git /tmp/ci-deps/forge_llm
+          pip install /tmp/ci-deps/forge_llm
           pip install -e ".[dev]"
+          rm -rf /tmp/ci-deps
 
       - name: Lint
         run: |
