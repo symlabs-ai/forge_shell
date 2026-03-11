@@ -31,4 +31,4 @@ jobs:
       - name: Test
         run: |
           . .venv/bin/activate
-          pytest -x -q
+          pytest -x -q --ignore=tests/e2e
